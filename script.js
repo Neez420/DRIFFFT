@@ -52,60 +52,15 @@
   if (!window.gsap || prefersReduced) return;
   gsap.registerPlugin(ScrollTrigger);
 
-  // Marquee
-  const marqueeTrack = document.querySelector(".marquee-track");
-  if (marqueeTrack) {
-    // Store the original content so we can rebuild on resize
-    const baseContent = marqueeTrack.innerHTML;
-    let baseWidth = 0;
-    let marqueeTween;
-    let wrapX;
-
-    const buildMarquee = () => {
-      marqueeTrack.innerHTML = baseContent;
-      marqueeTrack.style.transform = "translateX(0)";
-      // Measure width of a single cycle
-      baseWidth = marqueeTrack.scrollWidth;
-      // Duplicate until we have at least 2x viewport width to avoid visible gaps
-      while (marqueeTrack.scrollWidth < window.innerWidth * 2) {
-        marqueeTrack.innerHTML += baseContent;
-      }
-      wrapX = gsap.utils.wrap(-baseWidth, 0);
-    };
-
-    const playMarquee = () => {
-      if (marqueeTween) marqueeTween.kill();
-      marqueeTween = gsap.to(marqueeTrack, {
-        x: -baseWidth,
-        duration: 18,
-        ease: "none",
-        repeat: -1,
-        modifiers: {
-          x: (x) => `${wrapX(parseFloat(x))}px`
-        }
-      });
-    };
-
-    buildMarquee();
-    playMarquee();
-    window.addEventListener("resize", () => {
-      buildMarquee();
-      playMarquee();
-    });
-  }
-
   // Scroll hint: center on load, fade after 1s or on scroll
   const scrollHint = document.querySelector(".scroll-hint");
   if (scrollHint) {
     gsap.set(scrollHint, { opacity: 1, scale: 1 });
     gsap.to(scrollHint, { opacity: 0, scale: 0.92, duration: 0.35, delay: 1, ease: "power2.out" });
-    ScrollTrigger.create({
-      trigger: ".hero",
-      start: "top top",
-      end: "bottom top",
-      onEnter: () => gsap.to(scrollHint, { opacity: 0, scale: 0.92, duration: 0.2, ease: "power2.out" }),
-      onUpdate: () => gsap.to(scrollHint, { opacity: 0, scale: 0.92, duration: 0.2, ease: "power2.out" })
-    });
+    window.addEventListener("scroll", () => {
+      scrollHint.style.opacity = "0";
+      scrollHint.style.transform = "scale(0.92)";
+    }, { once: true, passive: true });
   }
 
   // Hero art + text reveal on scroll (pinned, sequential)
@@ -114,24 +69,27 @@
   const title = document.querySelector(".hero-title");
   const sub = document.querySelector(".hero-sub");
 
-  if (heroArt) gsap.set(heroArt, { left: "50%", right: "auto", xPercent: -50, scale: 1.45, y: -60 });
-  if (title) gsap.set(title, { opacity: 0, yPercent: 60 });
-  if (sub) gsap.set(sub, { opacity: 0, yPercent: 80 });
+  if (heroArt) gsap.set(heroArt, { left: "50%", right: "auto", xPercent: -50, scale: 1.28, y: -30 });
+  if (title) gsap.set(title, { opacity: 0, yPercent: 80 });
+  if (sub) gsap.set(sub, { opacity: 0, yPercent: 100 });
 
   if (heroArt || title || sub) {
     const heroScrollTl = gsap.timeline({
       scrollTrigger: {
         trigger: ".hero",
-        start: "top center",
-        end: "bottom top",
-        scrub: true
+        start: "top top",
+        end: "+=95%",
+        scrub: 0.45,
+        pin: true,
+        pinSpacing: true,
+        anticipatePin: 0.8
       }
     });
 
     heroScrollTl
       .to(heroArt || {}, { scale: 1, y: 0, ease: "power2.out" }, 0)
-      .to(title || {}, { opacity: 1, yPercent: 0, ease: "power2.out" }, 0.1)
-      .to(sub || {}, { opacity: 1, yPercent: 0, ease: "power2.out" }, 0.25);
+      .to(title || {}, { opacity: 1, yPercent: 0, ease: "power2.out" }, 0.18)
+      .to(sub || {}, { opacity: 1, yPercent: 0, ease: "power2.out" }, 0.38);
   }
 
   // Orbs
