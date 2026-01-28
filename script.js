@@ -6,74 +6,6 @@
   const yearEl = document.getElementById("year");
   if (yearEl) yearEl.textContent = String(new Date().getFullYear());
 
-  // Mobile nav
-  const toggle = document.querySelector(".nav-toggle");
-  const panel = document.getElementById("navpanel");
-  const nav = document.querySelector(".nav");
-
-  const setNavOpen = (open) => {
-    if (!toggle || !panel) return;
-    toggle.setAttribute("aria-expanded", String(open));
-    if (open) {
-      panel.classList.add("open");
-      document.documentElement.style.overflow = "hidden";
-    } else {
-      panel.classList.remove("open");
-      document.documentElement.style.overflow = "";
-    }
-  };
-
-  if (toggle && panel) {
-    toggle.addEventListener("click", () => {
-      const open = toggle.getAttribute("aria-expanded") === "true";
-      setNavOpen(!open);
-    });
-
-    panel.addEventListener("click", (e) => {
-      const a = e.target.closest("a");
-      if (!a) return;
-      setNavOpen(false);
-    });
-
-    document.addEventListener("keydown", (e) => {
-      if (e.key !== "Escape") return;
-      setNavOpen(false);
-    });
-  }
-
-  // Small-screen nav styling injected via CSS
-  const style = document.createElement("style");
-  style.textContent = `
-    @media (max-width: 820px){
-      .nav-toggle{ display:inline-flex; align-items:center; justify-content:center; }
-      .nav-panel{
-        position: fixed;
-        left: 16px;
-        right: 16px;
-        top: 76px;
-        display: grid;
-        gap: 10px;
-        padding: 14px;
-        border-radius: 22px;
-        border: 1px solid rgba(233,236,245,.14);
-        background: rgba(10,12,22,.72);
-        backdrop-filter: blur(14px);
-        box-shadow: 0 18px 60px rgba(0,0,0,.55);
-        transform: translateY(-16px);
-        opacity: 0;
-        pointer-events: none;
-      }
-      .nav-panel.open{
-        opacity: 1;
-        transform: translateY(0);
-        pointer-events: auto;
-      }
-      .nav-cta{ margin-left: 0; text-align:center; }
-      .nav-link{ padding: 12px 12px; }
-    }
-  `;
-  document.head.appendChild(style);
-
   // Cursor
   const cursor = document.querySelector(".cursor");
   if (cursor) {
@@ -116,16 +48,6 @@
   });
 
   // Manual card flip button
-  const cardInner = document.querySelector(".card-3d-inner");
-  const flipBtn = document.getElementById("toggleCard");
-  if (flipBtn) {
-    flipBtn.addEventListener("click", () => {
-      if (!window.gsap || prefersReduced || !cardInner) return;
-      const isFlipped = cardInner.dataset.flipped === "true";
-      cardInner.dataset.flipped = isFlipped ? "false" : "true";
-      gsap.to(cardInner, { rotateY: isFlipped ? 0 : 180, duration: 0.8, ease: "power3.out" });
-    });
-  }
 
   if (!window.gsap || prefersReduced) return;
   gsap.registerPlugin(ScrollTrigger);
@@ -133,17 +55,84 @@
   // Marquee
   const marqueeTrack = document.querySelector(".marquee-track");
   if (marqueeTrack) {
-    const distance = marqueeTrack.scrollWidth / 2;
-    gsap.to(marqueeTrack, { x: -distance, duration: 18, ease: "none", repeat: -1 });
+    // Store the original content so we can rebuild on resize
+    const baseContent = marqueeTrack.innerHTML;
+    let baseWidth = 0;
+    let marqueeTween;
+    let wrapX;
+
+    const buildMarquee = () => {
+      marqueeTrack.innerHTML = baseContent;
+      marqueeTrack.style.transform = "translateX(0)";
+      // Measure width of a single cycle
+      baseWidth = marqueeTrack.scrollWidth;
+      // Duplicate until we have at least 2x viewport width to avoid visible gaps
+      while (marqueeTrack.scrollWidth < window.innerWidth * 2) {
+        marqueeTrack.innerHTML += baseContent;
+      }
+      wrapX = gsap.utils.wrap(-baseWidth, 0);
+    };
+
+    const playMarquee = () => {
+      if (marqueeTween) marqueeTween.kill();
+      marqueeTween = gsap.to(marqueeTrack, {
+        x: -baseWidth,
+        duration: 18,
+        ease: "none",
+        repeat: -1,
+        modifiers: {
+          x: (x) => `${wrapX(parseFloat(x))}px`
+        }
+      });
+    };
+
+    buildMarquee();
+    playMarquee();
+    window.addEventListener("resize", () => {
+      buildMarquee();
+      playMarquee();
+    });
   }
 
-  // Intro
-  gsap.timeline({ defaults: { ease: "power3.out" } })
-    .from(".nav", { y: -14, opacity: 0, duration: 0.7 }, 0)
-    .from(".hero-kicker .pill", { y: 10, opacity: 0, stagger: 0.08, duration: 0.6 }, 0.1)
-    .from(".hero-title", { y: 22, opacity: 0, duration: 0.8 }, 0.15)
-    .from(".hero-sub", { y: 16, opacity: 0, duration: 0.7 }, 0.25)
-    .from(".hero-actions .btn", { y: 14, opacity: 0, stagger: 0.09, duration: 0.6 }, 0.32);
+  // Scroll hint: center on load, fade after 1s or on scroll
+  const scrollHint = document.querySelector(".scroll-hint");
+  if (scrollHint) {
+    gsap.set(scrollHint, { opacity: 1, scale: 1 });
+    gsap.to(scrollHint, { opacity: 0, scale: 0.92, duration: 0.35, delay: 1, ease: "power2.out" });
+    ScrollTrigger.create({
+      trigger: ".hero",
+      start: "top top",
+      end: "bottom top",
+      onEnter: () => gsap.to(scrollHint, { opacity: 0, scale: 0.92, duration: 0.2, ease: "power2.out" }),
+      onUpdate: () => gsap.to(scrollHint, { opacity: 0, scale: 0.92, duration: 0.2, ease: "power2.out" })
+    });
+  }
+
+  // Hero art + text reveal on scroll (pinned, sequential)
+  const heroArt = document.querySelector(".hero-art");
+  const heroInner = document.querySelector(".hero-inner");
+  const title = document.querySelector(".hero-title");
+  const sub = document.querySelector(".hero-sub");
+
+  if (heroArt) gsap.set(heroArt, { left: "50%", right: "auto", xPercent: -50, scale: 1.45, y: -60 });
+  if (title) gsap.set(title, { opacity: 0, yPercent: 60 });
+  if (sub) gsap.set(sub, { opacity: 0, yPercent: 80 });
+
+  if (heroArt || title || sub) {
+    const heroScrollTl = gsap.timeline({
+      scrollTrigger: {
+        trigger: ".hero",
+        start: "top center",
+        end: "bottom top",
+        scrub: true
+      }
+    });
+
+    heroScrollTl
+      .to(heroArt || {}, { scale: 1, y: 0, ease: "power2.out" }, 0)
+      .to(title || {}, { opacity: 1, yPercent: 0, ease: "power2.out" }, 0.1)
+      .to(sub || {}, { opacity: 1, yPercent: 0, ease: "power2.out" }, 0.25);
+  }
 
   // Orbs
   gsap.to(".orb-a", { x: 40, y: -20, duration: 10, repeat: -1, yoyo: true, ease: "sine.inOut" });
@@ -151,18 +140,54 @@
   gsap.to(".orb-c", { x: 20, y: 30, duration: 14, repeat: -1, yoyo: true, ease: "sine.inOut" });
 
   // Hero art scroll flip
-  if (cardInner) {
-    gsap.set(cardInner, { rotateY: -8, rotateX: 8 });
-    gsap.to(cardInner, {
-      rotateY: 180,
-      rotateX: 0,
-      scrollTrigger: {
-        trigger: "#products",
-        start: "top 80%",
-        end: "top 20%",
-        scrub: true
+  // Particles
+  const canvas = document.getElementById("hero-particles");
+  if (canvas) {
+    const ctx = canvas.getContext("2d");
+    let particles = [];
+    let width, height;
+
+    const resize = () => {
+      width = canvas.width = canvas.parentElement.offsetWidth;
+      height = canvas.height = canvas.parentElement.offsetHeight;
+    };
+    window.addEventListener("resize", resize);
+    resize();
+
+    const createParticles = () => {
+      particles = [];
+      const count = width < 600 ? 40 : 80;
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          s: Math.random() * 2 + 1, // size
+          v: Math.random() * 0.4 + 0.1, // velocity
+          a: Math.random() * 0.5 + 0.2 // alpha
+        });
       }
-    });
+    };
+    createParticles();
+
+    const animateParticles = () => {
+      if (!ctx) return;
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#0047FF";
+
+      particles.forEach(p => {
+        p.y -= p.v;
+        if (p.y < -10) {
+          p.y = height + 10;
+          p.x = Math.random() * width;
+        }
+        ctx.globalAlpha = p.a;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.s, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      requestAnimationFrame(animateParticles);
+    };
+    animateParticles();
   }
 
   // Rings pulse
@@ -176,7 +201,7 @@
     stagger: 0.2
   });
 
-  // Products reveal
+  // Section reveals
   gsap.from(".section-head", {
     y: 18,
     opacity: 0,
@@ -184,23 +209,13 @@
     ease: "power3.out",
     scrollTrigger: { trigger: ".section-head", start: "top 80%" }
   });
-  gsap.from(".product-card", {
+  gsap.from(".work-item", {
     y: 18,
     opacity: 0,
     stagger: 0.12,
     duration: 0.85,
     ease: "power3.out",
-    scrollTrigger: { trigger: ".grid-2", start: "top 80%" }
-  });
-
-  // Nav background on scroll
-  ScrollTrigger.create({
-    start: 10,
-    onUpdate: (self) => {
-      const s = self.scroll();
-      if (!nav) return;
-      nav.style.background = s > 24 ? "rgba(10,12,22,.62)" : "rgba(10,12,22,.45)";
-    }
+    scrollTrigger: { trigger: ".work-list", start: "top 80%" }
   });
 
   window.addEventListener("load", () => ScrollTrigger.refresh());
