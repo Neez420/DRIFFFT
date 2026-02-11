@@ -165,12 +165,6 @@ main {
   position: relative;
 }
 
-.work {
-  min-height: 100vh;
-  display: grid;
-  align-content: center;
-}
-
 
 .section-head {
   width: min(var(--max), calc(100% - 32px));
@@ -204,11 +198,6 @@ main {
   .grid-2 {
     grid-template-columns: 1fr;
   }
-
-  .work {
-    min-height: auto;
-    align-content: initial;
-  }
 }
 
 .work-list {
@@ -221,10 +210,11 @@ main {
 .work-item {
   position: relative;
   padding: 18px 18px 16px;
+  border: none;
   border-radius: 18px;
-  background: rgba(255, 255, 255, .01);
-  backdrop-filter: blur(8px) saturate(118%);
-  -webkit-backdrop-filter: blur(8px) saturate(118%);
+  background: rgba(255, 255, 255, .002);
+  backdrop-filter: blur(4px) saturate(112%) contrast(102%);
+  -webkit-backdrop-filter: blur(4px) saturate(112%) contrast(102%);
   box-shadow: none;
   overflow: hidden;
   transition: transform .2s ease;
@@ -281,10 +271,9 @@ main {
 .footer-note {
   display: block;
   margin-top: 6px;
-  font-size: 13px;
-  line-height: 1.45;
-  color: rgba(233, 236, 245, .72);
-  max-width: none;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(203, 213, 225, .62);
   white-space: nowrap;
 }
 
