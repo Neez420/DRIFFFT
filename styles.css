@@ -165,6 +165,12 @@ main {
   position: relative;
 }
 
+.work {
+  min-height: 100vh;
+  display: grid;
+  align-content: center;
+}
+
 
 .section-head {
   width: min(var(--max), calc(100% - 32px));
@@ -198,6 +204,11 @@ main {
   .grid-2 {
     grid-template-columns: 1fr;
   }
+
+  .work {
+    min-height: auto;
+    align-content: initial;
+  }
 }
 
 .work-list {
@@ -210,20 +221,31 @@ main {
 .work-item {
   position: relative;
   padding: 18px 18px 16px;
-  border: 1px solid rgba(233, 236, 245, .12);
   border-radius: 18px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, .03), rgba(255, 255, 255, .01));
-  transition: border-color .2s ease, transform .2s ease, background .2s ease;
+  background: rgba(255, 255, 255, .01);
+  backdrop-filter: blur(8px) saturate(118%);
+  -webkit-backdrop-filter: blur(8px) saturate(118%);
+  box-shadow: none;
+  overflow: hidden;
+  transition: transform .2s ease;
   display: block;
+}
+
+.work-item::before {
+  content: none;
+}
+
+.work-item::after {
+  content: none;
 }
 
 .work-item:hover {
   transform: translateY(-2px);
-  border-color: rgba(0, 229, 255, .35);
-  background: linear-gradient(145deg, rgba(0, 71, 255, .08), rgba(0, 229, 255, .03));
 }
 
 .work-row {
+  position: relative;
+  z-index: 3;
   display: flex;
   justify-content: space-between;
   gap: 12px;

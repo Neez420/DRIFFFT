@@ -3,6 +3,19 @@
   const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const canUseGsap = Boolean(window.gsap);
   const canUseScrollTrigger = Boolean(window.gsap && window.ScrollTrigger && !prefersReduced);
+  const shouldForceTop = !window.location.hash;
+  const forceTop = () => window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+
+  if ("scrollRestoration" in history) {
+    history.scrollRestoration = "manual";
+  }
+
+  if (shouldForceTop) {
+    forceTop();
+    requestAnimationFrame(forceTop);
+    window.addEventListener("pageshow", forceTop, { once: true });
+    window.addEventListener("load", forceTop, { once: true });
+  }
 
   if (canUseScrollTrigger) {
     gsap.registerPlugin(ScrollTrigger);
@@ -110,6 +123,27 @@
     let viewportH = 0;
     let dpr = window.devicePixelRatio || 1;
     let rafId = 0;
+    const pointer = {
+      x: 0,
+      y: 0,
+      active: false,
+      lastMove: 0
+    };
+
+    const onPointerMove = (e) => {
+      pointer.x = e.clientX;
+      pointer.y = e.clientY;
+      pointer.active = true;
+      pointer.lastMove = performance.now();
+    };
+
+    const onPointerLeave = () => {
+      pointer.active = false;
+    };
+
+    const onTouchStart = () => {
+      pointer.active = false;
+    };
 
     const rand = (min, max) => min + Math.random() * (max - min);
 
@@ -117,6 +151,10 @@
       viewportW = window.innerWidth;
       viewportH = window.innerHeight;
       if (!viewportW || !viewportH) return;
+      if (!pointer.lastMove) {
+        pointer.x = viewportW * 0.5;
+        pointer.y = viewportH * 0.5;
+      }
       dpr = window.devicePixelRatio || 1;
 
       ctxCanvas.width = Math.max(1, Math.round(viewportW * dpr));
@@ -216,9 +254,12 @@
       const intro = easeOutExpo(clamp01(state.intro));
       const scatter = clamp01(state.scatter);
       const explode = Math.min(1, scatter * 1.55);
-      const fade = lerp(1, 0.22, Math.pow(scatter, 1.45));
+      const fade = lerp(1, 0.86, Math.pow(scatter, 1.2));
       const ambient = Math.pow(scatter, 1.2);
       const t = performance.now() * 0.001;
+      const pointerIdleMs = performance.now() - pointer.lastMove;
+      const pointerRadius = Math.max(120, Math.min(260, viewportW * 0.16));
+      const pointerReady = pointer.active && pointerIdleMs < 220 && scatter < 0.2;
 
       const cx = viewportW / 2;
       const cy = viewportH / 2;
@@ -243,9 +284,28 @@
         const y = lerp(formedY, explodedY, scatter) + ambientY;
         const z = lerp(formedZ, explodedZ, scatter) + ambientZ;
 
-        const depth = perspective / Math.max(120, perspective - z);
-        const drawX = cx + (x - cx) * depth;
-        const drawY = cy + (y - cy) * depth;
+        let drawWorldX = x;
+        let drawWorldY = y;
+        let drawWorldZ = z;
+
+        if (pointerReady && intro > 0.72) {
+          const dx = drawWorldX - pointer.x;
+          const dy = drawWorldY - pointer.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < pointerRadius) {
+            const n = 1 - dist / pointerRadius;
+            const falloff = n * n;
+            const invDist = 1 / Math.max(1, dist);
+            const push = (24 + 30 * scatter) * falloff;
+            drawWorldX += dx * invDist * push;
+            drawWorldY += dy * invDist * push;
+            drawWorldZ += (66 + 110 * scatter) * falloff;
+          }
+        }
+
+        const depth = perspective / Math.max(120, perspective - drawWorldZ);
+        const drawX = cx + (drawWorldX - cx) * depth;
+        const drawY = cy + (drawWorldY - cy) * depth;
 
         const alpha = p.alpha * intro * fade;
         if (alpha < 0.02) continue;
@@ -265,6 +325,9 @@
       buildParticles();
     };
 
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    window.addEventListener("pointerleave", onPointerLeave);
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
     window.addEventListener("resize", onResize);
     buildParticles();
     render();
@@ -274,6 +337,9 @@
       rebuild: buildParticles,
       destroy: () => {
         cancelAnimationFrame(rafId);
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerleave", onPointerLeave);
+        window.removeEventListener("touchstart", onTouchStart);
         window.removeEventListener("resize", onResize);
         ctxCanvas.remove();
       }
@@ -343,6 +409,10 @@
   });
 
   window.addEventListener("load", () => {
+    if (shouldForceTop) {
+      forceTop();
+      if (particleWord) particleWord.state.scatter = 0;
+    }
     particleWord?.rebuild();
     ScrollTrigger.refresh();
   });
