@@ -88,7 +88,7 @@
     const offCtx = offscreen.getContext("2d", { alpha: true });
     if (!offCtx) return null;
 
-    driftWord.appendChild(ctxCanvas);
+    document.body.appendChild(ctxCanvas);
     driftWord.classList.add("particle-mode");
 
     const letterSpans = Array.from(driftWord.querySelectorAll(":scope > span"));
@@ -106,23 +106,21 @@
     ];
 
     let particles = [];
-    let cssWidth = 0;
-    let cssHeight = 0;
+    let viewportW = 0;
+    let viewportH = 0;
     let dpr = window.devicePixelRatio || 1;
     let rafId = 0;
 
     const rand = (min, max) => min + Math.random() * (max - min);
 
     const buildParticles = () => {
-      const rect = driftWord.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-
-      cssWidth = rect.width;
-      cssHeight = rect.height;
+      viewportW = window.innerWidth;
+      viewportH = window.innerHeight;
+      if (!viewportW || !viewportH) return;
       dpr = window.devicePixelRatio || 1;
 
-      ctxCanvas.width = Math.max(1, Math.round(cssWidth * dpr));
-      ctxCanvas.height = Math.max(1, Math.round(cssHeight * dpr));
+      ctxCanvas.width = Math.max(1, Math.round(viewportW * dpr));
+      ctxCanvas.height = Math.max(1, Math.round(viewportH * dpr));
       offscreen.width = ctxCanvas.width;
       offscreen.height = ctxCanvas.height;
 
@@ -136,8 +134,8 @@
         if (!char) return;
 
         const spanRect = span.getBoundingClientRect();
-        const x = (spanRect.left - rect.left + spanRect.width / 2) * dpr;
-        const y = (spanRect.top - rect.top + spanRect.height / 2) * dpr;
+        const x = (spanRect.left + spanRect.width / 2) * dpr;
+        const y = (spanRect.top + spanRect.height / 2) * dpr;
         const fontSize = Math.max(10, spanRect.height * 0.9) * dpr;
 
         offCtx.font = `800 ${fontSize}px Inter, system-ui, -apple-system, Segoe UI, sans-serif`;
@@ -145,10 +143,10 @@
       });
 
       const { data, width, height } = offCtx.getImageData(0, 0, offscreen.width, offscreen.height);
-      const step = Math.max(2, Math.floor((cssWidth < 520 ? 5 : 4) * dpr));
+      const step = Math.max(2, Math.floor((viewportW < 520 ? 5 : 4) * dpr));
       const built = [];
-      const centerX = cssWidth / 2;
-      const centerY = cssHeight / 2;
+      const centerX = viewportW / 2;
+      const centerY = viewportH / 2;
 
       for (let y = 0; y < height; y += step) {
         for (let x = 0; x < width; x += step) {
@@ -161,19 +159,19 @@
           const ny = (homeY - centerY) / Math.max(1, centerY);
 
           const scatterX = homeX
-            + nx * rand(cssWidth * 0.2, cssWidth * 0.7)
-            + rand(-cssWidth * 0.25, cssWidth * 0.25);
+            + nx * rand(viewportW * 0.2, viewportW * 0.72)
+            + rand(-viewportW * 0.26, viewportW * 0.26);
           const scatterY = homeY
-            + ny * rand(cssHeight * 0.2, cssHeight * 1.1)
-            + rand(-cssHeight * 0.9, cssHeight * 0.9);
+            + ny * rand(viewportH * 0.2, viewportH * 1.14)
+            + rand(-viewportH * 0.95, viewportH * 0.95);
 
           const base = palette[(Math.random() * palette.length) | 0];
 
           built.push({
             homeX,
             homeY,
-            startX: homeX + rand(-cssWidth * 1.2, cssWidth * 1.2),
-            startY: homeY + rand(-cssHeight * 1.4, cssHeight * 1.4),
+            startX: homeX + rand(-viewportW * 1.2, viewportW * 1.2),
+            startY: homeY + rand(-viewportH * 1.4, viewportH * 1.4),
             startZ: rand(-760, 520),
             scatterX,
             scatterY,
@@ -182,12 +180,21 @@
             size: rand(0.9, 2.2),
             r: base[0],
             g: base[1],
-            b: base[2]
+            b: base[2],
+            driftAmpX: rand(1.2, 8.6),
+            driftAmpY: rand(1.2, 8.6),
+            driftAmpZ: rand(6, 28),
+            driftFreqX: rand(0.14, 0.52),
+            driftFreqY: rand(0.12, 0.46),
+            driftFreqZ: rand(0.1, 0.32),
+            driftPhaseX: rand(0, Math.PI * 2),
+            driftPhaseY: rand(0, Math.PI * 2),
+            driftPhaseZ: rand(0, Math.PI * 2)
           });
         }
       }
 
-      const maxParticles = cssWidth < 640 ? 1800 : 2800;
+      const maxParticles = viewportW < 640 ? 1800 : 2800;
       if (built.length > maxParticles) {
         const stride = Math.ceil(built.length / maxParticles);
         particles = built.filter((_, i) => i % stride === 0);
@@ -209,10 +216,12 @@
       const intro = easeOutExpo(clamp01(state.intro));
       const scatter = clamp01(state.scatter);
       const explode = Math.min(1, scatter * 1.55);
-      const fade = Math.max(0, 1 - Math.pow(scatter, 1.65));
+      const fade = lerp(1, 0.22, Math.pow(scatter, 1.45));
+      const ambient = Math.pow(scatter, 1.2);
+      const t = performance.now() * 0.001;
 
-      const cx = cssWidth / 2;
-      const cy = cssHeight / 2;
+      const cx = viewportW / 2;
+      const cy = viewportH / 2;
       const perspective = 760;
 
       for (let i = 0; i < particles.length; i++) {
@@ -226,9 +235,13 @@
         const explodedY = lerp(p.homeY, p.scatterY, explode);
         const explodedZ = lerp(0, p.scatterZ, explode);
 
-        const x = lerp(formedX, explodedX, scatter);
-        const y = lerp(formedY, explodedY, scatter);
-        const z = lerp(formedZ, explodedZ, scatter);
+        const ambientX = Math.sin(t * p.driftFreqX + p.driftPhaseX) * p.driftAmpX * ambient;
+        const ambientY = Math.cos(t * p.driftFreqY + p.driftPhaseY) * p.driftAmpY * ambient;
+        const ambientZ = Math.sin(t * p.driftFreqZ + p.driftPhaseZ) * p.driftAmpZ * ambient;
+
+        const x = lerp(formedX, explodedX, scatter) + ambientX;
+        const y = lerp(formedY, explodedY, scatter) + ambientY;
+        const z = lerp(formedZ, explodedZ, scatter) + ambientZ;
 
         const depth = perspective / Math.max(120, perspective - z);
         const drawX = cx + (x - cx) * depth;
@@ -262,6 +275,7 @@
       destroy: () => {
         cancelAnimationFrame(rafId);
         window.removeEventListener("resize", onResize);
+        ctxCanvas.remove();
       }
     };
   };
