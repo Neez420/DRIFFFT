@@ -1,6 +1,12 @@
 /* DRIFFFT site scripts */
 (() => {
   const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const canUseGsap = Boolean(window.gsap);
+  const canUseScrollTrigger = Boolean(window.gsap && window.ScrollTrigger && !prefersReduced);
+
+  if (canUseScrollTrigger) {
+    gsap.registerPlugin(ScrollTrigger);
+  }
 
   const yearEl = document.getElementById("year");
   if (yearEl) yearEl.textContent = String(new Date().getFullYear());
@@ -46,12 +52,6 @@
 
   const driftWord = document.querySelector(".drift-word");
   const workSection = document.getElementById("work");
-  const canUseGsap = Boolean(window.gsap);
-  const canUseScrollTrigger = Boolean(window.gsap && window.ScrollTrigger && !prefersReduced);
-
-  if (canUseScrollTrigger) {
-    gsap.registerPlugin(ScrollTrigger);
-  }
 
   let allowAutoScroll = true;
   const stopAutoScroll = () => {
@@ -70,112 +70,231 @@
     }, delay);
   };
 
-  const shardPolygons = [
-    "polygon(0% 0%, 58% 0%, 34% 46%, 0% 56%)",
-    "polygon(58% 0%, 100% 0%, 100% 54%, 34% 46%)",
-    "polygon(0% 56%, 34% 46%, 54% 100%, 0% 100%)",
-    "polygon(34% 46%, 100% 54%, 100% 100%, 54% 100%)",
-    "polygon(20% 18%, 70% 8%, 58% 58%, 14% 66%)",
-    "polygon(44% 44%, 84% 30%, 92% 74%, 46% 86%, 20% 62%)"
-  ];
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const clamp01 = (t) => Math.min(1, Math.max(0, t));
+  const easeOutExpo = (t) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t));
 
-  const setupCharacterShards = () => {
-    if (!driftWord) return { letters: [], cores: [], shards: [] };
-    const letters = Array.from(driftWord.querySelectorAll(":scope > span"));
-    const cores = [];
-    const shards = [];
-    const shardsPerLetter = window.innerWidth < 860 ? 4 : 6;
+  const setupParticleWord = () => {
+    if (!driftWord) return null;
+
+    const ctxCanvas = document.createElement("canvas");
+    ctxCanvas.className = "drift-particle-canvas";
+    ctxCanvas.setAttribute("aria-hidden", "true");
+
+    const ctx = ctxCanvas.getContext("2d", { alpha: true });
+    if (!ctx) return null;
+
+    const offscreen = document.createElement("canvas");
+    const offCtx = offscreen.getContext("2d", { alpha: true });
+    if (!offCtx) return null;
+
+    driftWord.appendChild(ctxCanvas);
+    driftWord.classList.add("particle-mode");
+
+    const letterSpans = Array.from(driftWord.querySelectorAll(":scope > span"));
+    const state = {
+      intro: canUseGsap && !prefersReduced ? 0 : 1,
+      scatter: 0
+    };
+
+    const palette = [
+      [214, 238, 255],
+      [160, 214, 255],
+      [118, 176, 255],
+      [94, 152, 255],
+      [255, 120, 140]
+    ];
+
+    let particles = [];
+    let cssWidth = 0;
+    let cssHeight = 0;
+    let dpr = window.devicePixelRatio || 1;
+    let rafId = 0;
+
     const rand = (min, max) => min + Math.random() * (max - min);
 
-    letters.forEach((letterEl, letterIndex) => {
-      const char = (letterEl.textContent || "").trim();
-      if (!char) return;
+    const buildParticles = () => {
+      const rect = driftWord.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
 
-      letterEl.classList.add("drift-letter");
-      letterEl.textContent = "";
+      cssWidth = rect.width;
+      cssHeight = rect.height;
+      dpr = window.devicePixelRatio || 1;
 
-      const core = document.createElement("span");
-      core.className = "letter-core";
-      core.textContent = char;
-      letterEl.appendChild(core);
-      cores.push(core);
+      ctxCanvas.width = Math.max(1, Math.round(cssWidth * dpr));
+      ctxCanvas.height = Math.max(1, Math.round(cssHeight * dpr));
+      offscreen.width = ctxCanvas.width;
+      offscreen.height = ctxCanvas.height;
 
-      for (let i = 0; i < shardsPerLetter; i++) {
-        const shard = document.createElement("span");
-        shard.className = "letter-shard";
-        shard.textContent = char;
-        shard.dataset.char = char;
-        const poly = shardPolygons[(letterIndex + i) % shardPolygons.length];
-        shard.style.clipPath = poly;
-        shard.style.webkitClipPath = poly;
-        shard.dataset.letterIndex = String(letterIndex);
-        const edgeX = rand(-2.8, 2.8);
-        const edgeY = rand(-2.8, 2.8);
-        shard.style.setProperty("--edge-x", `${edgeX.toFixed(2)}px`);
-        shard.style.setProperty("--edge-y", `${edgeY.toFixed(2)}px`);
-        shard.style.setProperty("--edge-x-inv", `${(-edgeX * 0.56).toFixed(2)}px`);
-        shard.style.setProperty("--edge-y-inv", `${(-edgeY * 0.56).toFixed(2)}px`);
-        shard.style.setProperty("--facet-angle", `${rand(0, 360).toFixed(1)}deg`);
-        shard.style.setProperty(
-          "--facet-light",
-          `hsla(${(208 + rand(-10, 12)).toFixed(1)}, 98%, ${(76 + rand(-6, 10)).toFixed(1)}%, 0.97)`
-        );
-        shard.style.setProperty(
-          "--facet-mid",
-          `hsla(${(214 + rand(-12, 12)).toFixed(1)}, 95%, ${(58 + rand(-8, 10)).toFixed(1)}%, 0.9)`
-        );
-        shard.style.setProperty(
-          "--facet-dark",
-          `hsla(${(224 + rand(-14, 12)).toFixed(1)}, 100%, ${(30 + rand(-8, 10)).toFixed(1)}%, 0.82)`
-        );
-        shard.style.transformOrigin = `${rand(18, 82).toFixed(1)}% ${rand(18, 82).toFixed(1)}%`;
-        letterEl.appendChild(shard);
-        shards.push(shard);
+      offCtx.clearRect(0, 0, offscreen.width, offscreen.height);
+      offCtx.fillStyle = "#ffffff";
+      offCtx.textAlign = "center";
+      offCtx.textBaseline = "middle";
+
+      letterSpans.forEach((span) => {
+        const char = (span.textContent || "").trim();
+        if (!char) return;
+
+        const spanRect = span.getBoundingClientRect();
+        const x = (spanRect.left - rect.left + spanRect.width / 2) * dpr;
+        const y = (spanRect.top - rect.top + spanRect.height / 2) * dpr;
+        const fontSize = Math.max(10, spanRect.height * 0.9) * dpr;
+
+        offCtx.font = `800 ${fontSize}px Inter, system-ui, -apple-system, Segoe UI, sans-serif`;
+        offCtx.fillText(char, x, y);
+      });
+
+      const { data, width, height } = offCtx.getImageData(0, 0, offscreen.width, offscreen.height);
+      const step = Math.max(2, Math.floor((cssWidth < 520 ? 5 : 4) * dpr));
+      const built = [];
+      const centerX = cssWidth / 2;
+      const centerY = cssHeight / 2;
+
+      for (let y = 0; y < height; y += step) {
+        for (let x = 0; x < width; x += step) {
+          const alpha = data[(y * width + x) * 4 + 3];
+          if (alpha < 35) continue;
+
+          const homeX = x / dpr;
+          const homeY = y / dpr;
+          const nx = (homeX - centerX) / Math.max(1, centerX);
+          const ny = (homeY - centerY) / Math.max(1, centerY);
+
+          const scatterX = homeX
+            + nx * rand(cssWidth * 0.2, cssWidth * 0.7)
+            + rand(-cssWidth * 0.25, cssWidth * 0.25);
+          const scatterY = homeY
+            + ny * rand(cssHeight * 0.2, cssHeight * 1.1)
+            + rand(-cssHeight * 0.9, cssHeight * 0.9);
+
+          const base = palette[(Math.random() * palette.length) | 0];
+
+          built.push({
+            homeX,
+            homeY,
+            startX: homeX + rand(-cssWidth * 1.2, cssWidth * 1.2),
+            startY: homeY + rand(-cssHeight * 1.4, cssHeight * 1.4),
+            startZ: rand(-760, 520),
+            scatterX,
+            scatterY,
+            scatterZ: rand(-1200, 1200),
+            alpha: rand(0.45, 0.95),
+            size: rand(0.9, 2.2),
+            r: base[0],
+            g: base[1],
+            b: base[2]
+          });
+        }
       }
-    });
 
-    return { letters, cores, shards };
+      const maxParticles = cssWidth < 640 ? 1800 : 2800;
+      if (built.length > maxParticles) {
+        const stride = Math.ceil(built.length / maxParticles);
+        particles = built.filter((_, i) => i % stride === 0);
+      } else {
+        particles = built;
+      }
+    };
+
+    const render = () => {
+      const w = ctxCanvas.width;
+      const h = ctxCanvas.height;
+      if (!w || !h) {
+        rafId = requestAnimationFrame(render);
+        return;
+      }
+
+      ctx.clearRect(0, 0, w, h);
+
+      const intro = easeOutExpo(clamp01(state.intro));
+      const scatter = clamp01(state.scatter);
+      const explode = Math.min(1, scatter * 1.55);
+      const fade = Math.max(0, 1 - Math.pow(scatter, 1.65));
+
+      const cx = cssWidth / 2;
+      const cy = cssHeight / 2;
+      const perspective = 760;
+
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+
+        const formedX = lerp(p.startX, p.homeX, intro);
+        const formedY = lerp(p.startY, p.homeY, intro);
+        const formedZ = lerp(p.startZ, 0, intro);
+
+        const explodedX = lerp(p.homeX, p.scatterX, explode);
+        const explodedY = lerp(p.homeY, p.scatterY, explode);
+        const explodedZ = lerp(0, p.scatterZ, explode);
+
+        const x = lerp(formedX, explodedX, scatter);
+        const y = lerp(formedY, explodedY, scatter);
+        const z = lerp(formedZ, explodedZ, scatter);
+
+        const depth = perspective / Math.max(120, perspective - z);
+        const drawX = cx + (x - cx) * depth;
+        const drawY = cy + (y - cy) * depth;
+
+        const alpha = p.alpha * intro * fade;
+        if (alpha < 0.02) continue;
+
+        const radius = p.size * (0.85 + explode * 0.6) * Math.max(0.68, Math.min(1.8, depth));
+
+        ctx.fillStyle = `rgba(${p.r}, ${p.g}, ${p.b}, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(drawX * dpr, drawY * dpr, radius * dpr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      rafId = requestAnimationFrame(render);
+    };
+
+    const onResize = () => {
+      buildParticles();
+    };
+
+    window.addEventListener("resize", onResize);
+    buildParticles();
+    render();
+
+    return {
+      state,
+      rebuild: buildParticles,
+      destroy: () => {
+        cancelAnimationFrame(rafId);
+        window.removeEventListener("resize", onResize);
+      }
+    };
   };
 
-  const { letters: driftLetters, cores: letterCores, shards: letterShards } = setupCharacterShards();
+  const particleWord = setupParticleWord();
 
-  const createShatterScroll = () => {
-    if (!canUseScrollTrigger || !letterShards.length || !driftWord) return;
+  if (!driftWord || !particleWord) {
+    autoScrollToWork(600);
+  } else if (!canUseGsap || prefersReduced) {
+    driftWord.style.opacity = "1";
+    particleWord.state.intro = 1;
+    autoScrollToWork(900);
+  } else {
+    gsap.set(driftWord, { opacity: 1 });
 
-    const half = Math.max(1, (driftLetters.length - 1) / 2);
-    const shardTargets = letterShards.map((shard) => {
-      const letterIndex = Number(shard.dataset.letterIndex || 0);
-      const fromCenter = (letterIndex - half) / half;
-      const driftX = fromCenter * window.innerWidth * 0.34;
-      const fullX = driftX + gsap.utils.random(-window.innerWidth * 0.28, window.innerWidth * 0.28);
-      const fullY = gsap.utils.random(-window.innerHeight * 0.64, window.innerHeight * 0.64);
-      const fullZ = gsap.utils.random(-1200, 1200);
-      const fullScale = gsap.utils.random(0.2, 1.85);
-      const fullRotate = gsap.utils.random(-220, 220);
-      const fullRotateX = gsap.utils.random(-150, 150);
-      const fullRotateY = gsap.utils.random(-150, 150);
+    const introTl = gsap.timeline();
+    introTl
+      .to(particleWord.state, {
+        intro: 1,
+        duration: 2,
+        ease: "expo.out"
+      }, 0)
+      .to(driftWord, {
+        y: -10,
+        duration: 0.6,
+        repeat: 1,
+        yoyo: true,
+        ease: "sine.inOut"
+      }, 1.36)
+      .call(() => autoScrollToWork(180));
+  }
 
-      return {
-        midX: fullX * 0.48,
-        midY: fullY * 0.48,
-        midZ: fullZ * 0.52,
-        midRotate: fullRotate * 0.45,
-        midRotateX: fullRotateX * 0.45,
-        midRotateY: fullRotateY * 0.45,
-        midScale: 1 + (fullScale - 1) * 0.45,
-        midOpacity: gsap.utils.random(0.65, 1),
-        x: fullX,
-        y: fullY,
-        z: fullZ,
-        rotate: fullRotate,
-        rotateX: fullRotateX,
-        rotateY: fullRotateY,
-        scale: fullScale,
-        opacity: gsap.utils.random(0.16, 0.72),
-        blur: gsap.utils.random(5, 20)
-      };
-    });
-
+  if (canUseScrollTrigger && particleWord) {
     gsap.timeline({
       scrollTrigger: {
         trigger: ".hero",
@@ -183,110 +302,11 @@
         end: "bottom top",
         scrub: 0.8
       }
-    })
-      .to(letterCores, {
-        opacity: 0,
-        filter: "blur(3px)",
-        duration: 0.16,
-        ease: "none",
-        stagger: { amount: 0.12, from: "center" }
-      }, 0)
-      .to(letterShards, {
-        x: (i) => shardTargets[i].midX,
-        y: (i) => shardTargets[i].midY,
-        z: (i) => shardTargets[i].midZ,
-        rotate: (i) => shardTargets[i].midRotate,
-        rotateX: (i) => shardTargets[i].midRotateX,
-        rotateY: (i) => shardTargets[i].midRotateY,
-        scale: (i) => shardTargets[i].midScale,
-        opacity: (i) => shardTargets[i].midOpacity,
-        filter: "blur(1px)",
-        duration: 0.42,
-        ease: "none",
-        stagger: { amount: 0.18, from: "random" }
-      }, 0)
-      .to(letterShards, {
-        x: (i) => shardTargets[i].x,
-        y: (i) => shardTargets[i].y,
-        z: (i) => shardTargets[i].z,
-        rotate: (i) => shardTargets[i].rotate,
-        rotateX: (i) => shardTargets[i].rotateX,
-        rotateY: (i) => shardTargets[i].rotateY,
-        scale: (i) => shardTargets[i].scale,
-        opacity: (i) => shardTargets[i].opacity,
-        filter: (i) => `blur(${shardTargets[i].blur}px)`,
-        duration: 0.58,
-        ease: "none",
-        stagger: { amount: 0.26, from: "random" }
-      }, 0.42)
-      .to(driftWord, {
-        opacity: 0.2,
-        duration: 0.4,
-        ease: "none"
-      }, 0.1);
-  };
-
-  if (!driftWord || !driftLetters.length) {
-    autoScrollToWork(600);
-  } else if (!canUseGsap || prefersReduced) {
-    driftWord.style.opacity = "1";
-    driftLetters.forEach((letter) => {
-      letter.style.transform = "none";
-      letter.style.filter = "none";
-      letter.style.opacity = "1";
-    });
-    autoScrollToWork(900);
-  } else {
-    gsap.set(driftWord, { opacity: 1 });
-
-    driftLetters.forEach((letter) => {
-      gsap.set(letter, {
-        x: gsap.utils.random(-window.innerWidth * 0.55, window.innerWidth * 0.55),
-        y: gsap.utils.random(-window.innerHeight * 0.55, window.innerHeight * 0.55),
-        z: gsap.utils.random(-600, 400),
-        rotate: gsap.utils.random(-42, 42),
-        scale: gsap.utils.random(0.62, 1.45),
-        opacity: 0,
-        filter: "blur(14px)"
-      });
-    });
-
-    letterShards.forEach((shard) => {
-      shard.style.opacity = "0";
-      shard.style.transform = "none";
-      shard.style.filter = "none";
-    });
-
-    const driftIntro = gsap.timeline();
-    driftIntro
-      .to(driftLetters, {
-        x: 0,
-        y: 0,
-        z: 0,
-        rotate: 0,
-        scale: 1,
-        opacity: 1,
-        filter: "blur(0px)",
-        duration: 2,
-        ease: "expo.out",
-        stagger: { amount: 0.62, from: "random" }
-      })
-      .to(driftWord, {
-        letterSpacing: "0.12em",
-        duration: 0.8,
-        ease: "power2.out"
-      }, 0.26)
-      .to(driftWord, {
-        y: -10,
-        duration: 0.65,
-        repeat: 1,
-        yoyo: true,
-        ease: "sine.inOut"
-      }, 1.4)
-      .call(() => {
-        createShatterScroll();
-        autoScrollToWork(180);
-      });
+    }).to(particleWord.state, {
+      scatter: 1,
+      duration: 1,
+      ease: "none"
+    }, 0);
   }
 
   if (!canUseScrollTrigger) return;
@@ -308,5 +328,8 @@
     scrollTrigger: { trigger: ".work-list", start: "top 80%" }
   });
 
-  window.addEventListener("load", () => ScrollTrigger.refresh());
+  window.addEventListener("load", () => {
+    particleWord?.rebuild();
+    ScrollTrigger.refresh();
+  });
 })();

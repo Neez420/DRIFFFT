@@ -28,7 +28,7 @@ body {
 body {
   margin: 0;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  background: #05070f;
+  background-color: #000000;
   color: var(--text);
   overflow-x: hidden;
   scrollbar-gutter: stable;
@@ -119,6 +119,7 @@ main {
 
 .drift-word {
   margin: 0;
+  position: relative;
   display: flex;
   justify-content: center;
   gap: clamp(4px, 0.8vw, 12px);
@@ -134,71 +135,27 @@ main {
 }
 
 .drift-word > span {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  will-change: transform, opacity, filter;
-}
-
-.drift-word > span > span {
-  grid-area: 1 / 1;
+  display: inline-block;
+  background: linear-gradient(110deg, #d7ebff 0%, #62c8ff 45%, #4878ff 72%, #b5ebff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
-}
-
-.letter-core {
-  position: relative;
-  z-index: 2;
-  background: linear-gradient(110deg, #d7ebff 0%, #62c8ff 45%, #4878ff 72%, #b5ebff 100%);
   text-shadow: 0 8px 26px rgba(0, 71, 255, 0.36);
 }
 
-.letter-shard {
-  position: relative;
-  z-index: 3;
-  opacity: 0;
-  pointer-events: none;
-  filter: blur(0px);
-  mix-blend-mode: screen;
-  transform-style: preserve-3d;
-  background:
-    linear-gradient(
-      var(--facet-angle, 120deg),
-      var(--facet-light, rgba(222, 242, 255, 0.96)) 0%,
-      var(--facet-mid, rgba(114, 184, 255, 0.9)) 45%,
-      var(--facet-dark, rgba(15, 67, 170, 0.82)) 100%
-    );
-  -webkit-text-stroke: 0.012em rgba(197, 228, 255, 0.28);
-  text-shadow:
-    0 0 20px rgba(86, 188, 255, 0.42),
-    0 2px 8px rgba(3, 16, 44, 0.7);
+.drift-word.particle-mode > span {
+  opacity: 0 !important;
+  visibility: hidden;
 }
 
-.letter-shard::before,
-.letter-shard::after {
-  content: attr(data-char);
+.drift-particle-canvas {
   position: absolute;
   inset: 0;
-  color: transparent;
-  background: inherit;
-  -webkit-background-clip: text;
-  background-clip: text;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-}
-
-.letter-shard::before {
-  transform: translate3d(var(--edge-x, 1px), var(--edge-y, 1px), -18px);
-  filter: brightness(0.6) saturate(1.2);
-  opacity: 0.62;
-}
-
-.letter-shard::after {
-  transform: translate3d(var(--edge-x-inv, -0.6px), var(--edge-y-inv, -0.6px), 12px);
-  filter: brightness(1.35) saturate(1.15) blur(0.2px);
-  opacity: 0.5;
+  z-index: 4;
+  filter: drop-shadow(0 10px 28px rgba(67, 136, 255, 0.34));
 }
 
 .section {
