@@ -278,6 +278,16 @@ main {
   opacity: .7;
 }
 
+.footer-note {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(233, 236, 245, .72);
+  max-width: none;
+  white-space: nowrap;
+}
+
 .footer {
   position: relative;
   z-index: 2;
