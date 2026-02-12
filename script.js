@@ -77,7 +77,28 @@
   const driftWord = document.querySelector(".drift-word");
   const heroEl = document.querySelector(".hero");
   const enjoyEl = document.querySelector(".hero-enjoy");
+  const enjoyPrefixEl = enjoyEl?.querySelector(".hero-enjoy-prefix") ?? null;
+  const enjoyAccentEl = enjoyEl?.querySelector(".hero-enjoy-accent") ?? null;
   const workSection = document.getElementById("work");
+
+  const buildEnjoyLetters = () => {
+    if (!enjoyPrefixEl) return [];
+    const text = enjoyPrefixEl.textContent || "";
+    enjoyPrefixEl.textContent = "";
+    const frag = document.createDocumentFragment();
+    const letters = [];
+    for (const ch of text) {
+      const span = document.createElement("span");
+      span.className = "hero-enjoy-letter";
+      span.textContent = ch === " " ? "\u00A0" : ch;
+      frag.appendChild(span);
+      letters.push(span);
+    }
+    enjoyPrefixEl.appendChild(frag);
+    return letters;
+  };
+
+  const enjoyLetters = buildEnjoyLetters();
 
   const syncEnjoyAlignment = () => {
     if (!enjoyEl || !driftWord || !heroEl) return;
@@ -136,7 +157,10 @@
     const letterSpans = Array.from(driftWord.querySelectorAll(":scope > span"));
     const state = {
       intro: canUseGsap && !prefersReduced ? 0 : 1,
-      scatter: 0
+      scatter: 0,
+      ripple: 0,
+      rippleOriginX: 0,
+      rippleOriginY: 0
     };
 
     const palette = [
@@ -195,6 +219,8 @@
       }
       const wordRect = driftWord.getBoundingClientRect();
       const wordVisible = wordRect.bottom > 0 && wordRect.top < viewportH;
+      state.rippleOriginX = wordRect.left + wordRect.width * 0.5;
+      state.rippleOriginY = wordRect.top + wordRect.height * 0.5;
       if (!force && !wordVisible && particles.length) return;
       if (!pointer.lastMove) {
         pointer.x = viewportW * 0.5;
@@ -310,6 +336,14 @@
       const explode = Math.min(1, scatter * 1.55);
       const fade = lerp(1, 0.86, Math.pow(scatter, 1.2));
       const ambient = Math.pow(scatter, 1.2);
+      const rippleProgress = clamp01(state.ripple);
+      const maxRippleRadius = Math.hypot(
+        Math.max(state.rippleOriginX, viewportW - state.rippleOriginX),
+        Math.max(state.rippleOriginY, viewportH - state.rippleOriginY)
+      );
+      const rippleStartFade = clamp01(rippleProgress / 0.1);
+      const rippleEndFade = 1 - clamp01((rippleProgress - 0.82) / 0.18);
+      const rippleEnvelope = rippleStartFade * rippleEndFade;
       const t = performance.now() * 0.001;
       const pointerRadius = Math.max(120, Math.min(260, viewportW * 0.16));
       const pointerReady = !isMobile && pointer.active && scatter < 0.2;
@@ -340,6 +374,28 @@
         let drawWorldX = x;
         let drawWorldY = y;
         let drawWorldZ = z;
+        let alphaBoost = 0;
+
+        if (rippleProgress > 0 && rippleEnvelope > 0.001) {
+          const dxRipple = p.homeX - state.rippleOriginX;
+          const dyRipple = p.homeY - state.rippleOriginY;
+          const distRipple = Math.hypot(dxRipple, dyRipple);
+          const waveRadius = (1 - rippleProgress) * maxRippleRadius;
+          const waveWidth = isMobile ? 54 : 76;
+          const bandRaw = 1 - Math.min(1, Math.abs(distRipple - waveRadius) / waveWidth);
+          if (bandRaw > 0) {
+            const invDistRipple = 1 / Math.max(1, distRipple);
+            const band = bandRaw * bandRaw * (3 - 2 * bandRaw);
+            const wave = band * band;
+            const decay = (0.45 + (1 - rippleProgress) * 0.55) * rippleEnvelope;
+            const pushXY = wave * decay * (isMobile ? 30 : 44);
+            const pushZ = wave * decay * (isMobile ? 140 : 210);
+            drawWorldX += dxRipple * invDistRipple * pushXY;
+            drawWorldY += dyRipple * invDistRipple * pushXY;
+            drawWorldZ += pushZ;
+            alphaBoost = wave * 0.46 * decay;
+          }
+        }
 
         if (pointerReady && intro > 0.72) {
           const dx = drawWorldX - pointer.x;
@@ -360,7 +416,7 @@
         const drawX = cx + (drawWorldX - cx) * depth;
         const drawY = cy + (drawWorldY - cy) * depth;
 
-        const alpha = p.alpha * intro * fade;
+        const alpha = p.alpha * intro * fade + alphaBoost;
         if (alpha < 0.02) continue;
 
         const explodeSizeBoost = isMobile ? 0.36 : 0.6;
@@ -425,40 +481,80 @@
         y: 12,
         filter: "blur(10px)"
       });
+      if (enjoyLetters.length) {
+        gsap.set(enjoyLetters, {
+          autoAlpha: 0
+        });
+      }
+      if (enjoyAccentEl) {
+        gsap.set(enjoyAccentEl, {
+          autoAlpha: 0,
+          scale: 0.64,
+          y: 8,
+          filter: "blur(8px)"
+        });
+      }
     }
 
     if (!shouldPlayHeroIntro()) {
       particleWord.state.intro = 1;
     } else {
+      const letterStagger = 0.052;
+      const letterDuration = 0.02;
+      const lettersStart = 0.12;
+      const lettersEnd = lettersStart + letterDuration + Math.max(0, enjoyLetters.length - 1) * letterStagger;
+      const accentStart = lettersEnd + 0.06;
+      const accentEnd = accentStart + 0.5;
+      const particleStart = accentEnd + 0.08;
+      const rippleStart = particleStart + 1.42;
       const introTl = gsap.timeline();
-      introTl
-        .to(".hero-enjoy", {
+      if (enjoyEl) {
+        introTl.to(enjoyEl, {
           autoAlpha: 1,
           y: 0,
           filter: "blur(0px)",
-          duration: 0.54,
+          duration: 0.3,
           ease: "power3.out"
-        }, 0.04)
-        .to(".hero-enjoy", {
+        }, 0);
+      }
+      if (enjoyLetters.length) {
+        introTl.to(enjoyLetters, {
+          autoAlpha: 1,
+          duration: letterDuration,
+          stagger: letterStagger,
+          ease: "steps(1)"
+        }, lettersStart);
+      }
+      if (enjoyAccentEl) {
+        introTl.to(enjoyAccentEl, {
+          autoAlpha: 1,
+          y: 0,
+          scale: 1,
+          filter: "blur(0px)",
+          duration: 0.5,
+          ease: "back.out(1.5)"
+        }, accentStart);
+      }
+      introTl.to(particleWord.state, {
+        intro: 1,
+        duration: 1.42,
+        ease: "expo.out"
+      }, particleStart);
+      introTl.to(particleWord.state, {
+        ripple: 1,
+        duration: 1.02,
+        ease: "power2.out"
+      }, particleStart + 0.08);
+      if (enjoyEl) {
+        introTl.to(enjoyEl, {
           autoAlpha: 0,
           y: -8,
           filter: "blur(8px)",
-          duration: 0.42,
+          duration: 0.38,
           ease: "power2.in"
-        }, 1.05)
-        .to(particleWord.state, {
-          intro: 1,
-          duration: 2,
-          ease: "expo.out"
-        }, 0)
-        .to(driftWord, {
-          y: -10,
-          duration: 0.6,
-          repeat: 1,
-          yoyo: true,
-          ease: "sine.inOut"
-        }, 1.36)
-        .call(() => autoScrollToWork(window.innerWidth < 768 ? 60 : 180));
+        }, accentEnd + 0.14);
+      }
+      introTl.call(() => autoScrollToWork(window.innerWidth < 768 ? 60 : 180), null, rippleStart + 0.52);
     }
   }
 

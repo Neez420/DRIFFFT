@@ -172,11 +172,22 @@ main {
   will-change: transform, opacity, filter;
 }
 
+.hero-enjoy-prefix {
+  display: inline-block;
+}
+
+.hero-enjoy-letter {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+}
+
 .hero-enjoy-accent {
+  display: inline-block;
   font-family: "Fraunces", serif;
   font-style: italic;
   font-weight: 500;
   letter-spacing: 0.02em;
+  transform-origin: 0% 70%;
 }
 
 .hero-inner {
