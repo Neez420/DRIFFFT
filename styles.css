@@ -174,14 +174,16 @@ main {
 
 .section-title {
   margin: 0;
-  font-size: 34px;
+  font-size: 180px;
   letter-spacing: -.03em;
 }
 
 .section-sub {
-  margin-top: 10px;
+ /* margin-top: 10px; */
+ padding-left: 16px;
+  font-size: 40px;
   max-width: 62ch;
-  color: rgba(233, 236, 245, .66);
+  color: rgba(233, 236, 245, .82);
 }
 
 .grid {
@@ -203,9 +205,9 @@ main {
 
 .work-list {
   width: min(var(--max), calc(100% - 32px));
-  margin: 16px auto 0;
+  margin: 64px auto 0;
   display: grid;
-  gap: 12px;
+  gap: 24px;
 }
 
 .work-item {

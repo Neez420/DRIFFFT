@@ -285,9 +285,8 @@
       const fade = lerp(1, 0.86, Math.pow(scatter, 1.2));
       const ambient = Math.pow(scatter, 1.2);
       const t = performance.now() * 0.001;
-      const pointerIdleMs = performance.now() - pointer.lastMove;
       const pointerRadius = Math.max(120, Math.min(260, viewportW * 0.16));
-      const pointerReady = !isMobile && pointer.active && pointerIdleMs < 220 && scatter < 0.2;
+      const pointerReady = !isMobile && pointer.active && scatter < 0.2;
 
       const cx = viewportW / 2;
       const cy = viewportH / 2;
