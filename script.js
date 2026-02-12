@@ -90,6 +90,7 @@
     for (const ch of text) {
       const span = document.createElement("span");
       span.className = "hero-enjoy-letter";
+      span.dataset.target = ch;
       span.textContent = ch === " " ? "\u00A0" : ch;
       frag.appendChild(span);
       letters.push(span);
@@ -99,6 +100,21 @@
   };
 
   const enjoyLetters = buildEnjoyLetters();
+  const scrambleChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&*+-?";
+  const randomScrambleChar = () => scrambleChars[(Math.random() * scrambleChars.length) | 0];
+  const applyEnjoyScramble = (progress) => {
+    if (!enjoyLetters.length) return;
+    const lockCount = Math.floor(clamp01(progress) * enjoyLetters.length);
+    for (let i = 0; i < enjoyLetters.length; i++) {
+      const letter = enjoyLetters[i];
+      const target = letter.dataset.target || "";
+      if (target === " ") {
+        letter.textContent = "\u00A0";
+        continue;
+      }
+      letter.textContent = i < lockCount ? target : randomScrambleChar();
+    }
+  };
 
   const syncEnjoyAlignment = () => {
     if (!enjoyEl || !driftWord || !heroEl) return;
@@ -483,7 +499,7 @@
       });
       if (enjoyLetters.length) {
         gsap.set(enjoyLetters, {
-          autoAlpha: 0
+          autoAlpha: 1
         });
       }
       if (enjoyAccentEl) {
@@ -499,11 +515,10 @@
     if (!shouldPlayHeroIntro()) {
       particleWord.state.intro = 1;
     } else {
-      const letterStagger = 0.052;
-      const letterDuration = 0.02;
-      const lettersStart = 0.12;
-      const lettersEnd = lettersStart + letterDuration + Math.max(0, enjoyLetters.length - 1) * letterStagger;
-      const accentStart = lettersEnd + 0.06;
+      const scrambleStart = 0.12;
+      const scrambleDuration = Math.max(0.88, enjoyLetters.length * 0.048);
+      const scrambleEnd = scrambleStart + scrambleDuration;
+      const accentStart = scrambleEnd + 0.06;
       const accentEnd = accentStart + 0.5;
       const particleStart = accentEnd + 0.08;
       const rippleStart = particleStart + 1.42;
@@ -518,12 +533,15 @@
         }, 0);
       }
       if (enjoyLetters.length) {
-        introTl.to(enjoyLetters, {
-          autoAlpha: 1,
-          duration: letterDuration,
-          stagger: letterStagger,
-          ease: "steps(1)"
-        }, lettersStart);
+        const scrambleState = { progress: 0 };
+        applyEnjoyScramble(0);
+        introTl.to(scrambleState, {
+          progress: 1,
+          duration: scrambleDuration,
+          ease: "none",
+          onUpdate: () => applyEnjoyScramble(scrambleState.progress),
+          onComplete: () => applyEnjoyScramble(1)
+        }, scrambleStart);
       }
       if (enjoyAccentEl) {
         introTl.to(enjoyAccentEl, {
