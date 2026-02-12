@@ -153,6 +153,32 @@ main {
   overflow: hidden;
 }
 
+.hero-enjoy {
+  position: absolute;
+  top: calc(50% + clamp(52px, 6.5vw, 100px));
+  left: 50%;
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif;
+  font-size: clamp(30px, 3.4vw, 40px);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  text-align: center;
+  color: rgba(233, 236, 245, .96);
+  opacity: 0;
+  filter: blur(10px);
+  pointer-events: none;
+  z-index: 3;
+  will-change: transform, opacity, filter;
+}
+
+.hero-enjoy-accent {
+  font-family: "Fraunces", serif;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
 .hero-inner {
   width: min(var(--max), calc(100% - 48px));
   margin: 0 auto;

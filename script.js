@@ -4,7 +4,10 @@
   const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
   const canUseGsap = Boolean(window.gsap);
   const canUseScrollTrigger = Boolean(window.gsap && window.ScrollTrigger && !prefersReduced);
-  const shouldForceTop = !window.location.hash;
+  const navEntry = performance.getEntriesByType("navigation")[0];
+  const isReload = navEntry?.type === "reload";
+  const shouldForceTop = !window.location.hash || isReload;
+  const getScrollY = () => Math.max(0, window.scrollY || window.pageYOffset || 0);
   const forceTop = () => window.scrollTo({ top: 0, left: 0, behavior: "auto" });
 
   if ("scrollRestoration" in history) {
@@ -14,6 +17,8 @@
   if (shouldForceTop) {
     forceTop();
     requestAnimationFrame(forceTop);
+    window.setTimeout(forceTop, 80);
+    window.setTimeout(forceTop, 260);
     window.addEventListener("pageshow", forceTop, { once: true });
     window.addEventListener("load", forceTop, { once: true });
   }
@@ -70,7 +75,24 @@
   }
 
   const driftWord = document.querySelector(".drift-word");
+  const heroEl = document.querySelector(".hero");
+  const enjoyEl = document.querySelector(".hero-enjoy");
   const workSection = document.getElementById("work");
+
+  const syncEnjoyAlignment = () => {
+    if (!enjoyEl || !driftWord || !heroEl) return;
+    const heroRect = heroEl.getBoundingClientRect();
+    const wordRect = driftWord.getBoundingClientRect();
+    const left = Math.max(12, wordRect.left - heroRect.left);
+    enjoyEl.style.left = `${left}px`;
+  };
+
+  syncEnjoyAlignment();
+  window.addEventListener("resize", syncEnjoyAlignment, { passive: true });
+  window.addEventListener("load", syncEnjoyAlignment, { once: true });
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(syncEnjoyAlignment).catch(() => {});
+  }
 
   let allowAutoScroll = true;
   const stopAutoScroll = () => {
@@ -382,31 +404,62 @@
   };
 
   const particleWord = setupParticleWord();
+  const shouldPlayHeroIntro = () => {
+    if (getScrollY() > 24) return false;
+    if (!heroEl) return true;
+    const rect = heroEl.getBoundingClientRect();
+    return rect.bottom > Math.max(120, window.innerHeight * 0.35);
+  };
 
   if (!driftWord || !particleWord) {
-    autoScrollToWork(600);
+    if (shouldPlayHeroIntro()) autoScrollToWork(600);
   } else if (!canUseGsap || prefersReduced) {
     driftWord.style.opacity = "1";
     particleWord.state.intro = 1;
-    autoScrollToWork(900);
+    if (shouldPlayHeroIntro()) autoScrollToWork(900);
   } else {
     gsap.set(driftWord, { opacity: 1 });
+    if (enjoyEl) {
+      gsap.set(enjoyEl, {
+        autoAlpha: 0,
+        y: 12,
+        filter: "blur(10px)"
+      });
+    }
 
-    const introTl = gsap.timeline();
-    introTl
-      .to(particleWord.state, {
-        intro: 1,
-        duration: 2,
-        ease: "expo.out"
-      }, 0)
-      .to(driftWord, {
-        y: -10,
-        duration: 0.6,
-        repeat: 1,
-        yoyo: true,
-        ease: "sine.inOut"
-      }, 1.36)
-      .call(() => autoScrollToWork(window.innerWidth < 768 ? 60 : 180));
+    if (!shouldPlayHeroIntro()) {
+      particleWord.state.intro = 1;
+    } else {
+      const introTl = gsap.timeline();
+      introTl
+        .to(".hero-enjoy", {
+          autoAlpha: 1,
+          y: 0,
+          filter: "blur(0px)",
+          duration: 0.54,
+          ease: "power3.out"
+        }, 0.04)
+        .to(".hero-enjoy", {
+          autoAlpha: 0,
+          y: -8,
+          filter: "blur(8px)",
+          duration: 0.42,
+          ease: "power2.in"
+        }, 1.05)
+        .to(particleWord.state, {
+          intro: 1,
+          duration: 2,
+          ease: "expo.out"
+        }, 0)
+        .to(driftWord, {
+          y: -10,
+          duration: 0.6,
+          repeat: 1,
+          yoyo: true,
+          ease: "sine.inOut"
+        }, 1.36)
+        .call(() => autoScrollToWork(window.innerWidth < 768 ? 60 : 180));
+    }
   }
 
   if (particleWord && window.innerWidth < 768) {
