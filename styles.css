@@ -187,7 +187,12 @@ main {
   font-style: italic;
   font-weight: 500;
   letter-spacing: 0.02em;
+  color: #F6D365;
   transform-origin: 0% 70%;
+}
+
+.hero-enjoy-dot {
+  color: rgba(233, 236, 245, .96);
 }
 
 .hero-inner {
