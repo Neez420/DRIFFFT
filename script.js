@@ -38,33 +38,6 @@
     });
   }
 
-  const tiltEls = isCoarsePointer ? [] : document.querySelectorAll("[data-tilt]");
-  tiltEls.forEach((el) => {
-    const strength = 10;
-    let raf = 0;
-
-    const onMove = (e) => {
-      const r = el.getBoundingClientRect();
-      const px = (e.clientX - r.left) / r.width;
-      const py = (e.clientY - r.top) / r.height;
-      const rotY = (px - 0.5) * strength;
-      const rotX = -(py - 0.5) * strength;
-
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        el.style.transform = `perspective(900px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateY(-2px)`;
-      });
-    };
-
-    const onLeave = () => {
-      cancelAnimationFrame(raf);
-      el.style.transform = "perspective(900px) rotateX(0deg) rotateY(0deg) translateY(0px)";
-    };
-
-    el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerleave", onLeave);
-  });
-
   const driftWord = document.querySelector(".drift-word");
   const workSection = document.getElementById("work");
 
@@ -441,22 +414,140 @@
 
   if (!canUseScrollTrigger) return;
 
-  gsap.from(".section-head", {
-    y: 18,
-    opacity: 0,
-    duration: 0.8,
-    ease: "power3.out",
-    scrollTrigger: { trigger: ".section-head", start: "top 80%" }
+  const isMobile = window.innerWidth < 768;
+
+  gsap.timeline({
+    scrollTrigger: {
+      trigger: "#work",
+      start: "top 86%",
+      end: "top 24%",
+      scrub: isMobile ? 0.75 : 1
+    }
+  })
+    .fromTo(".section-title",
+      {
+        yPercent: 38,
+        scale: isMobile ? 0.96 : 0.9,
+        opacity: 0.35,
+        filter: "blur(10px)"
+      },
+      {
+        yPercent: 0,
+        scale: 1,
+        opacity: 1,
+        filter: "blur(0px)",
+        ease: "none"
+      },
+      0
+    )
+    .fromTo(".section-sub",
+      {
+        yPercent: 72,
+        xPercent: -8,
+        opacity: 0.2,
+        filter: "blur(6px)"
+      },
+      {
+        yPercent: 0,
+        xPercent: 0,
+        opacity: 1,
+        filter: "blur(0px)",
+        ease: "none"
+      },
+      0.06
+    );
+
+  gsap.to(".work-list", {
+    yPercent: isMobile ? -4 : -8,
+    ease: "none",
+    scrollTrigger: {
+      trigger: "#work",
+      start: "top bottom",
+      end: "bottom top",
+      scrub: isMobile ? 0.8 : 1.1
+    }
   });
 
-  gsap.from(".work-item", {
-    y: 18,
-    opacity: 0,
-    stagger: 0.12,
-    duration: 0.85,
-    ease: "power3.out",
-    scrollTrigger: { trigger: ".work-list", start: "top 80%" }
+  gsap.utils.toArray(".work-item").forEach((item, index) => {
+    const depth = index % 2 === 0 ? 8 : -8;
+    const meta = item.querySelector(".work-meta");
+    const desc = item.querySelector(".work-desc");
+    const arrow = item.querySelector(".work-arrow");
+    const mono = item.querySelector(".mono");
+
+    gsap.timeline({
+      scrollTrigger: {
+        trigger: item,
+        start: "top 96%",
+        end: "bottom 56%",
+        scrub: isMobile ? 0.7 : 1
+      }
+    })
+      .fromTo(item,
+        {
+          y: isMobile ? 36 : 84,
+          rotateX: isMobile ? 0 : -depth,
+          rotateY: isMobile ? 0 : depth * 0.6,
+          scale: isMobile ? 0.98 : 0.95
+        },
+        {
+          immediateRender: false,
+          y: 0,
+          rotateX: 0,
+          rotateY: 0,
+          scale: 1,
+          ease: "none"
+        },
+        0
+      )
+      .fromTo(meta,
+        { x: 24 },
+        { immediateRender: false, x: 0, ease: "none" },
+        0.08
+      )
+      .fromTo(desc,
+        { y: 22 },
+        { immediateRender: false, y: 0, ease: "none" },
+        0.12
+      )
+      .fromTo(mono,
+        { letterSpacing: "0.26em" },
+        { immediateRender: false, letterSpacing: "0.06em", ease: "none" },
+        0.1
+      )
+      .fromTo(arrow,
+        { y: 20, x: -10, rotate: -20 },
+        { immediateRender: false, y: 0, x: 0, rotate: 0, ease: "none" },
+        0.16
+      );
+
+    if (!isMobile) {
+      gsap.to(item, {
+        xPercent: index % 2 === 0 ? -1.2 : 1.2,
+        ease: "none",
+        scrollTrigger: {
+          trigger: item,
+          start: "top bottom",
+          end: "bottom top",
+          scrub: 1.2
+        }
+      });
+    }
   });
+
+  gsap.timeline({
+    scrollTrigger: {
+      trigger: ".footer",
+      start: "top bottom",
+      end: "top 70%",
+      scrub: isMobile ? 0.7 : 1
+    }
+  })
+    .fromTo(".footer-inner",
+      { y: 44 },
+      { immediateRender: false, y: 0, ease: "none" },
+      0
+    );
 
   window.addEventListener("load", () => {
     if (shouldForceTop) {
