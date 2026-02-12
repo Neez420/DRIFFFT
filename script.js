@@ -131,21 +131,83 @@
     document.fonts.ready.then(syncEnjoyAlignment).catch(() => {});
   }
 
-  let allowAutoScroll = true;
-  const stopAutoScroll = () => {
-    allowAutoScroll = false;
+  let scrollLockActive = false;
+  let autoScrollInProgress = false;
+  let lockedScrollY = 0;
+  const scrollKeys = new Set([
+    "ArrowUp",
+    "ArrowDown",
+    "PageUp",
+    "PageDown",
+    "Home",
+    "End",
+    " ",
+    "Spacebar"
+  ]);
+
+  const lockScrollInput = (event) => {
+    if (!scrollLockActive) return;
+    if (event.type === "keydown" && !scrollKeys.has(event.key)) return;
+    event.preventDefault();
   };
 
-  window.addEventListener("wheel", stopAutoScroll, { once: true, passive: true });
-  window.addEventListener("touchstart", stopAutoScroll, { once: true, passive: true });
-  window.addEventListener("keydown", stopAutoScroll, { once: true });
+  const setScrollLock = (active) => {
+    scrollLockActive = active;
+    if (active) lockedScrollY = getScrollY();
+  };
+
+  const enforceScrollLock = () => {
+    if (!scrollLockActive || autoScrollInProgress) return;
+    const y = getScrollY();
+    if (Math.abs(y - lockedScrollY) < 1) return;
+    window.scrollTo({ top: lockedScrollY, left: 0, behavior: "auto" });
+  };
+
+  window.addEventListener("wheel", lockScrollInput, { passive: false, capture: true });
+  window.addEventListener("touchmove", lockScrollInput, { passive: false, capture: true });
+  window.addEventListener("keydown", lockScrollInput, { capture: true });
+  window.addEventListener("scroll", enforceScrollLock, { passive: true });
+
+  const waitForScrollSettle = (targetY, timeoutMs = 2200) =>
+    new Promise((resolve) => {
+      const start = performance.now();
+      let stableFrames = 0;
+
+      const tick = () => {
+        const y = getScrollY();
+        const dist = Math.abs(y - targetY);
+        stableFrames = dist < 2 ? stableFrames + 1 : 0;
+        if (stableFrames >= 4 || performance.now() - start >= timeoutMs) {
+          resolve();
+          return;
+        }
+        requestAnimationFrame(tick);
+      };
+
+      requestAnimationFrame(tick);
+    });
 
   const autoScrollToWork = (delay) => {
     if (!workSection) return;
-    window.setTimeout(() => {
-      if (!allowAutoScroll) return;
-      const isMobile = window.innerWidth < 768;
-      workSection.scrollIntoView({ behavior: prefersReduced || isMobile ? "auto" : "smooth", block: "start" });
+    setScrollLock(true);
+    window.setTimeout(async () => {
+      try {
+        autoScrollInProgress = true;
+        const isMobile = window.innerWidth < 768;
+        const behavior = prefersReduced || isMobile ? "auto" : "smooth";
+        const targetY = workSection.getBoundingClientRect().top + getScrollY();
+
+        workSection.scrollIntoView({ behavior, block: "start" });
+
+        if (behavior === "smooth") {
+          await waitForScrollSettle(targetY);
+        } else {
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      } finally {
+        autoScrollInProgress = false;
+        setScrollLock(false);
+      }
     }, delay);
   };
 
@@ -515,6 +577,7 @@
     if (!shouldPlayHeroIntro()) {
       particleWord.state.intro = 1;
     } else {
+      setScrollLock(true);
       const scrambleStart = 0.12;
       const scrambleDuration = Math.max(0.88, enjoyLetters.length * 0.048);
       const scrambleEnd = scrambleStart + scrambleDuration;
