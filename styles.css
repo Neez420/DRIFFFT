@@ -206,6 +206,10 @@ main {
 .section-sub {
  /* margin-top: 10px; */
  padding-left: 16px;
+  font-family: "Fraunces", serif;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   font-size: 40px;
   max-width: 62ch;
   color: rgba(233, 236, 245, .82);
