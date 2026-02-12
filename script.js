@@ -443,7 +443,7 @@
     .fromTo(".section-sub",
       {
         yPercent: 72,
-        xPercent: -8,
+        xPercent: -34,
         opacity: 0.2,
         filter: "blur(6px)"
       },
@@ -457,43 +457,26 @@
       0.06
     );
 
-  gsap.utils.toArray(".work-item").forEach((item) => {
-    const meta = item.querySelector(".work-meta");
-    const desc = item.querySelector(".work-desc");
-    const arrow = item.querySelector(".work-arrow");
-
-    gsap.timeline({
-      defaults: { ease: "power3.out" },
-      scrollTrigger: {
-        trigger: item,
-        start: "bottom bottom",
-        once: true
-      }
-    })
-      .from(item, {
-        y: isMobile ? 18 : 32,
-        scale: isMobile ? 0.98 : 0.96,
-        opacity: 0,
-        duration: 0.6
-      }, 0)
-      .from(meta, {
-        x: 12,
-        opacity: 0,
-        duration: 0.45
-      }, 0.04)
-      .from(desc, {
-        y: 10,
-        opacity: 0,
-        duration: 0.5
-      }, 0.08)
-      .from(arrow, {
-        y: 8,
-        x: -6,
-        rotate: -6,
-        opacity: 0,
-        duration: 0.45
-      }, 0.1);
-  });
+  gsap.timeline({
+    scrollTrigger: {
+      trigger: "#work",
+      start: "top 42%",
+      end: "top 18%",
+      scrub: isMobile ? 0.9 : 1
+    }
+  }).fromTo(".work-item",
+    {
+      y: isMobile ? 14 : 24,
+      opacity: 0
+    },
+    {
+      y: 0,
+      opacity: 1,
+      stagger: 0.14,
+      ease: "none"
+    },
+    0
+  );
 
   gsap.timeline({
     scrollTrigger: {
