@@ -111,11 +111,11 @@
     };
 
     const palette = [
-      [3, 4, 94],      // Abyss #03045E
-      [2, 62, 138],    // Ocean Blue #023E8A
-      [0, 119, 182],   // Teal #0077B6
-      [72, 202, 228],  // Aqua #48CAE4
-      [173, 232, 244]  // Seafoam #ADE8F4
+      [18, 18, 18],    // Graphite #121212
+      [42, 42, 42],    // Dark Grey #2A2A2A
+      [0, 229, 255],   // Neon Cyan #00E5FF
+      [58, 134, 255],  // Muted Blue #3A86FF
+      [241, 241, 241]  // Soft White #F1F1F1
     ];
 
     let particles = [];

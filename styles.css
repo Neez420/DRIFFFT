@@ -239,6 +239,7 @@ main {
   display: flex;
   justify-content: space-between;
   gap: 12px;
+  padding-right: 44px;
   align-items: baseline;
 }
 
@@ -253,6 +254,9 @@ main {
 }
 
 .work-arrow {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
   font-size: 18px;
   color: rgba(233, 236, 245, .7);
 }
