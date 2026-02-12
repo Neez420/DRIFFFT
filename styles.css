@@ -342,7 +342,7 @@ main {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding-right: 18px;
+  padding-right: 0;
   align-items: baseline;
 }
 

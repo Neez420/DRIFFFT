@@ -497,12 +497,12 @@
     }
   }).fromTo(".work-item",
     {
-      y: isMobile ? 14 : 24,
-      opacity: 0
+      x: isMobile ? 36 : 72,
+      filter: "blur(10px)"
     },
     {
-      y: 0,
-      opacity: 1,
+      x: 0,
+      filter: "blur(0px)",
       stagger: 0.14,
       ease: "none"
     },
