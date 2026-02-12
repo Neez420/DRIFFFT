@@ -457,82 +457,42 @@
       0.06
     );
 
-  gsap.to(".work-list", {
-    yPercent: isMobile ? -4 : -8,
-    ease: "none",
-    scrollTrigger: {
-      trigger: "#work",
-      start: "top bottom",
-      end: "bottom top",
-      scrub: isMobile ? 0.8 : 1.1
-    }
-  });
-
-  gsap.utils.toArray(".work-item").forEach((item, index) => {
-    const depth = index % 2 === 0 ? 8 : -8;
+  gsap.utils.toArray(".work-item").forEach((item) => {
     const meta = item.querySelector(".work-meta");
     const desc = item.querySelector(".work-desc");
     const arrow = item.querySelector(".work-arrow");
-    const mono = item.querySelector(".mono");
 
     gsap.timeline({
+      defaults: { ease: "power3.out" },
       scrollTrigger: {
         trigger: item,
-        start: "top 96%",
-        end: "bottom 56%",
-        scrub: isMobile ? 0.7 : 1
+        start: "bottom bottom",
+        once: true
       }
     })
-      .fromTo(item,
-        {
-          y: isMobile ? 36 : 84,
-          rotateX: isMobile ? 0 : -depth,
-          rotateY: isMobile ? 0 : depth * 0.6,
-          scale: isMobile ? 0.98 : 0.95
-        },
-        {
-          immediateRender: false,
-          y: 0,
-          rotateX: 0,
-          rotateY: 0,
-          scale: 1,
-          ease: "none"
-        },
-        0
-      )
-      .fromTo(meta,
-        { x: 24 },
-        { immediateRender: false, x: 0, ease: "none" },
-        0.08
-      )
-      .fromTo(desc,
-        { y: 22 },
-        { immediateRender: false, y: 0, ease: "none" },
-        0.12
-      )
-      .fromTo(mono,
-        { letterSpacing: "0.26em" },
-        { immediateRender: false, letterSpacing: "0.06em", ease: "none" },
-        0.1
-      )
-      .fromTo(arrow,
-        { y: 20, x: -10, rotate: -20 },
-        { immediateRender: false, y: 0, x: 0, rotate: 0, ease: "none" },
-        0.16
-      );
-
-    if (!isMobile) {
-      gsap.to(item, {
-        xPercent: index % 2 === 0 ? -1.2 : 1.2,
-        ease: "none",
-        scrollTrigger: {
-          trigger: item,
-          start: "top bottom",
-          end: "bottom top",
-          scrub: 1.2
-        }
-      });
-    }
+      .from(item, {
+        y: isMobile ? 18 : 32,
+        scale: isMobile ? 0.98 : 0.96,
+        opacity: 0,
+        duration: 0.6
+      }, 0)
+      .from(meta, {
+        x: 12,
+        opacity: 0,
+        duration: 0.45
+      }, 0.04)
+      .from(desc, {
+        y: 10,
+        opacity: 0,
+        duration: 0.5
+      }, 0.08)
+      .from(arrow, {
+        y: 8,
+        x: -6,
+        rotate: -6,
+        opacity: 0,
+        duration: 0.45
+      }, 0.1);
   });
 
   gsap.timeline({

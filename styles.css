@@ -250,6 +250,8 @@ main {
   display: block;
   transform-style: preserve-3d;
   will-change: transform, opacity, filter;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .work-item::before {
