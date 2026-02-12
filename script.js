@@ -26,6 +26,31 @@
   const yearEl = document.getElementById("year");
   if (yearEl) yearEl.textContent = String(new Date().getFullYear());
 
+  const setCardHoverOrigin = (card, event) => {
+    const rect = card.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    card.style.setProperty("--hover-x", `${x}px`);
+    card.style.setProperty("--hover-y", `${y}px`);
+  };
+
+  if (!isCoarsePointer) {
+    const workCards = document.querySelectorAll(".work-item");
+    workCards.forEach((card) => {
+      card.addEventListener("pointerenter", (event) => {
+        setCardHoverOrigin(card, event);
+        card.classList.add("is-hovered");
+      });
+      card.addEventListener("pointermove", (event) => {
+        setCardHoverOrigin(card, event);
+      });
+      card.addEventListener("pointerleave", (event) => {
+        setCardHoverOrigin(card, event);
+        card.classList.remove("is-hovered");
+      });
+    });
+  }
+
   const cursor = document.querySelector(".cursor");
   if (cursor && !isCoarsePointer) {
     let active = false;
@@ -35,6 +60,12 @@
         cursor.style.opacity = "1";
       }
       cursor.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+    });
+
+    const linkCards = document.querySelectorAll(".work-item");
+    linkCards.forEach((card) => {
+      card.addEventListener("pointerenter", () => cursor.classList.add("is-link"));
+      card.addEventListener("pointerleave", () => cursor.classList.remove("is-link"));
     });
   }
 
