@@ -102,6 +102,7 @@ main {
 .hero {
   position: relative;
   min-height: 100vh;
+  min-height: 100svh;
   padding: 0;
   display: grid;
   align-items: center;
@@ -297,6 +298,32 @@ main {
   flex-wrap: wrap;
   border-top: 1px solid rgba(233, 236, 245, .10);
   padding-top: 18px;
+}
+
+@media (max-width: 768px) {
+  .hero-inner {
+    width: calc(100% - 12px);
+  }
+
+  .drift-word {
+    font-size: clamp(62px, 18vw, 96px);
+    letter-spacing: 0.02em;
+    gap: 0;
+  }
+
+  .drift-particle-canvas {
+    filter: none;
+  }
+
+  .section {
+    padding: 64px 0;
+  }
+}
+
+@media (pointer: coarse) {
+  .cursor {
+    display: none;
+  }
 }
 
 /* Reduced motion */

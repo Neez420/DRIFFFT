@@ -1,6 +1,7 @@
 /* DRIFFFT site scripts */
 (() => {
   const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
   const canUseGsap = Boolean(window.gsap);
   const canUseScrollTrigger = Boolean(window.gsap && window.ScrollTrigger && !prefersReduced);
   const shouldForceTop = !window.location.hash;
@@ -19,13 +20,14 @@
 
   if (canUseScrollTrigger) {
     gsap.registerPlugin(ScrollTrigger);
+    ScrollTrigger.config({ ignoreMobileResize: true });
   }
 
   const yearEl = document.getElementById("year");
   if (yearEl) yearEl.textContent = String(new Date().getFullYear());
 
   const cursor = document.querySelector(".cursor");
-  if (cursor) {
+  if (cursor && !isCoarsePointer) {
     let active = false;
     window.addEventListener("pointermove", (e) => {
       if (!active) {
@@ -36,7 +38,7 @@
     });
   }
 
-  const tiltEls = document.querySelectorAll("[data-tilt]");
+  const tiltEls = isCoarsePointer ? [] : document.querySelectorAll("[data-tilt]");
   tiltEls.forEach((el) => {
     const strength = 10;
     let raf = 0;
@@ -79,7 +81,8 @@
     if (!workSection) return;
     window.setTimeout(() => {
       if (!allowAutoScroll) return;
-      workSection.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "start" });
+      const isMobile = window.innerWidth < 768;
+      workSection.scrollIntoView({ behavior: prefersReduced || isMobile ? "auto" : "smooth", block: "start" });
     }, delay);
   };
 
@@ -123,6 +126,9 @@
     let viewportH = 0;
     let dpr = window.devicePixelRatio || 1;
     let rafId = 0;
+    let lastBuildW = 0;
+    let lastBuildH = 0;
+    let scatterVisual = 0;
     const pointer = {
       x: 0,
       y: 0,
@@ -147,15 +153,28 @@
 
     const rand = (min, max) => min + Math.random() * (max - min);
 
-    const buildParticles = () => {
+    const buildParticles = (force = false) => {
       viewportW = window.innerWidth;
       viewportH = window.innerHeight;
       if (!viewportW || !viewportH) return;
+      const isMobile = viewportW < 768;
+      if (
+        !force &&
+        isMobile &&
+        lastBuildW &&
+        Math.abs(viewportW - lastBuildW) < 2 &&
+        Math.abs(viewportH - lastBuildH) < 120
+      ) {
+        return;
+      }
+      const wordRect = driftWord.getBoundingClientRect();
+      const wordVisible = wordRect.bottom > 0 && wordRect.top < viewportH;
+      if (!force && !wordVisible && particles.length) return;
       if (!pointer.lastMove) {
         pointer.x = viewportW * 0.5;
         pointer.y = viewportH * 0.5;
       }
-      dpr = window.devicePixelRatio || 1;
+      dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 2 : 3);
 
       ctxCanvas.width = Math.max(1, Math.round(viewportW * dpr));
       ctxCanvas.height = Math.max(1, Math.round(viewportH * dpr));
@@ -181,7 +200,7 @@
       });
 
       const { data, width, height } = offCtx.getImageData(0, 0, offscreen.width, offscreen.height);
-      const step = Math.max(2, Math.floor((viewportW < 520 ? 5 : 4) * dpr));
+      const step = Math.max(1, Math.floor((isMobile ? 2.2 : 4) * dpr));
       const built = [];
       const centerX = viewportW / 2;
       const centerY = viewportH / 2;
@@ -214,14 +233,14 @@
             scatterX,
             scatterY,
             scatterZ: rand(-1200, 1200),
-            alpha: rand(0.45, 0.95),
-            size: rand(0.9, 2.2),
+            alpha: rand(isMobile ? 0.72 : 0.45, 0.98),
+            size: rand(isMobile ? 0.95 : 0.9, isMobile ? 2.05 : 2.2),
             r: base[0],
             g: base[1],
             b: base[2],
-            driftAmpX: rand(1.2, 8.6),
-            driftAmpY: rand(1.2, 8.6),
-            driftAmpZ: rand(6, 28),
+            driftAmpX: rand(1.2, isMobile ? 5.6 : 8.6),
+            driftAmpY: rand(1.2, isMobile ? 5.6 : 8.6),
+            driftAmpZ: rand(6, isMobile ? 18 : 28),
             driftFreqX: rand(0.14, 0.52),
             driftFreqY: rand(0.12, 0.46),
             driftFreqZ: rand(0.1, 0.32),
@@ -232,13 +251,18 @@
         }
       }
 
-      const maxParticles = viewportW < 640 ? 1800 : 2800;
+      const maxParticles = viewportW < 640 ? 2400 : 2800;
       if (built.length > maxParticles) {
         const stride = Math.ceil(built.length / maxParticles);
         particles = built.filter((_, i) => i % stride === 0);
       } else {
         particles = built;
       }
+      if (!particles.length) {
+        scatterVisual = state.scatter;
+      }
+      lastBuildW = viewportW;
+      lastBuildH = viewportH;
     };
 
     const render = () => {
@@ -252,14 +276,18 @@
       ctx.clearRect(0, 0, w, h);
 
       const intro = easeOutExpo(clamp01(state.intro));
-      const scatter = clamp01(state.scatter);
+      const isMobile = viewportW < 768;
+      scatterVisual = isMobile
+        ? lerp(scatterVisual, clamp01(state.scatter), 0.2)
+        : clamp01(state.scatter);
+      const scatter = clamp01(scatterVisual);
       const explode = Math.min(1, scatter * 1.55);
       const fade = lerp(1, 0.86, Math.pow(scatter, 1.2));
       const ambient = Math.pow(scatter, 1.2);
       const t = performance.now() * 0.001;
       const pointerIdleMs = performance.now() - pointer.lastMove;
       const pointerRadius = Math.max(120, Math.min(260, viewportW * 0.16));
-      const pointerReady = pointer.active && pointerIdleMs < 220 && scatter < 0.2;
+      const pointerReady = !isMobile && pointer.active && pointerIdleMs < 220 && scatter < 0.2;
 
       const cx = viewportW / 2;
       const cy = viewportH / 2;
@@ -310,7 +338,8 @@
         const alpha = p.alpha * intro * fade;
         if (alpha < 0.02) continue;
 
-        const radius = p.size * (0.85 + explode * 0.6) * Math.max(0.68, Math.min(1.8, depth));
+        const explodeSizeBoost = isMobile ? 0.36 : 0.6;
+        const radius = p.size * (0.85 + explode * explodeSizeBoost) * Math.max(0.68, Math.min(1.8, depth));
 
         ctx.fillStyle = `rgba(${p.r}, ${p.g}, ${p.b}, ${alpha})`;
         ctx.beginPath();
@@ -321,22 +350,25 @@
       rafId = requestAnimationFrame(render);
     };
 
+    let resizeRaf = 0;
     const onResize = () => {
-      buildParticles();
+      cancelAnimationFrame(resizeRaf);
+      resizeRaf = requestAnimationFrame(() => buildParticles(false));
     };
 
     window.addEventListener("pointermove", onPointerMove, { passive: true });
     window.addEventListener("pointerleave", onPointerLeave);
     window.addEventListener("touchstart", onTouchStart, { passive: true });
     window.addEventListener("resize", onResize);
-    buildParticles();
+    buildParticles(true);
     render();
 
     return {
       state,
-      rebuild: buildParticles,
+      rebuild: (force = false) => buildParticles(force),
       destroy: () => {
         cancelAnimationFrame(rafId);
+        cancelAnimationFrame(resizeRaf);
         window.removeEventListener("pointermove", onPointerMove);
         window.removeEventListener("pointerleave", onPointerLeave);
         window.removeEventListener("touchstart", onTouchStart);
@@ -371,10 +403,29 @@
         yoyo: true,
         ease: "sine.inOut"
       }, 1.36)
-      .call(() => autoScrollToWork(180));
+      .call(() => autoScrollToWork(window.innerWidth < 768 ? 60 : 180));
   }
 
-  if (canUseScrollTrigger && particleWord) {
+  if (particleWord && window.innerWidth < 768) {
+    const hero = document.querySelector(".hero");
+    let scrollRaf = 0;
+
+    const syncMobileScatter = () => {
+      if (!hero) return;
+      const heroTravel = Math.max(1, hero.offsetHeight * 0.9);
+      const y = Math.max(0, window.scrollY || window.pageYOffset || 0);
+      particleWord.state.scatter = clamp01(y / heroTravel);
+    };
+
+    const onScroll = () => {
+      cancelAnimationFrame(scrollRaf);
+      scrollRaf = requestAnimationFrame(syncMobileScatter);
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    syncMobileScatter();
+  } else if (canUseScrollTrigger && particleWord) {
     gsap.timeline({
       scrollTrigger: {
         trigger: ".hero",
@@ -413,7 +464,7 @@
       forceTop();
       if (particleWord) particleWord.state.scatter = 0;
     }
-    particleWord?.rebuild();
+    particleWord?.rebuild(true);
     ScrollTrigger.refresh();
   });
 })();
