@@ -584,6 +584,15 @@ main {
       padding-left: 5px;
   }
 
+  .section-title-dot-anchor {
+    color: inherit;
+  }
+
+  .section-title-dot-probe,
+  .section-title-baseline-probe {
+    display: none;
+  }
+
   .mono {
     font-size: 16px;
   }

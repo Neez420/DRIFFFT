@@ -699,67 +699,81 @@
       return parsed || { r: 245, g: 245, b: 245 };
     };
 
-    const getSectionTitleDotTarget = () => {
-      let rect = null;
+    const getTextRangeRect = (textNode, start, end) => {
+      if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return null;
+      const text = textNode.textContent || "";
+      if (start < 0 || end <= start || end > text.length) return null;
+      const range = document.createRange();
+      range.setStart(textNode, start);
+      range.setEnd(textNode, end);
+      const rect = range.getBoundingClientRect();
+      range.detach?.();
+      if (!rect || (!rect.width && !rect.height)) return null;
+      return rect;
+    };
+
+    const getSectionTitleDotRect = () => {
+      if (sectionTitleDotAnchor) {
+        const anchorTextNode = sectionTitleDotAnchor.firstChild;
+        const anchorRect = getTextRangeRect(anchorTextNode, 0, 1);
+        if (anchorRect) return anchorRect;
+      }
 
       if (sectionTitleDotProbe) {
         const probeTextNode = sectionTitleDotProbe.firstChild;
         const probeText = probeTextNode?.nodeType === Node.TEXT_NODE ? probeTextNode.textContent || "" : "";
         const dotIndex = probeText.lastIndexOf(".");
         if (dotIndex >= 0) {
-          const probeRange = document.createRange();
-          probeRange.setStart(probeTextNode, dotIndex);
-          probeRange.setEnd(probeTextNode, dotIndex + 1);
-          rect = probeRange.getBoundingClientRect();
-          probeRange.detach?.();
+          const probeRect = getTextRangeRect(probeTextNode, dotIndex, dotIndex + 1);
+          if (probeRect) return probeRect;
         }
       }
 
-      if (!rect || (!rect.width && !rect.height)) {
-        if (!sectionTitleDotAnchor) return null;
-        const textNode = sectionTitleDotAnchor.firstChild;
-        if (textNode && textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
-          const range = document.createRange();
-          range.setStart(textNode, 0);
-          range.setEnd(textNode, 1);
-          rect = range.getBoundingClientRect();
-          range.detach?.();
-        }
-      }
+      if (!sectionTitleDotAnchor) return null;
+      const fallbackRect = sectionTitleDotAnchor.getBoundingClientRect();
+      if (!fallbackRect || (!fallbackRect.width && !fallbackRect.height)) return null;
+      return fallbackRect;
+    };
 
-      if ((!rect || (!rect.width && !rect.height)) && sectionTitleDotAnchor) {
-        rect = sectionTitleDotAnchor.getBoundingClientRect();
-      }
-      if (!rect.width && !rect.height) return null;
-      const fontSize = parseFloat(window.getComputedStyle(sectionTitleDotAnchor).fontSize) || rect.height;
+    const getSectionTitleDotTarget = () => {
       const layoutWidth = viewportW || window.innerWidth || 0;
       const isMobile = layoutWidth < 768;
-      const maxDotDiameter = isMobile ? 9 : 30;
-      const minDotDiameter = isMobile ? 4 : 11;
+      if (isMobile) return null;
+
+      const rect = getSectionTitleDotRect();
+      if (!rect || (!rect.width && !rect.height)) return null;
+      const fontSize = parseFloat(window.getComputedStyle(sectionTitleDotAnchor).fontSize) || rect.height;
+      const maxDotDiameter = 30;
+      const minDotDiameter = 11;
+      const measuredDotDiameter = Math.max(rect.width, rect.height);
       const dotDiameter = Math.max(
         minDotDiameter,
         Math.min(maxDotDiameter, Math.max(
-          rect.width * (isMobile ? 0.92 : 1.1),
-          fontSize * (isMobile ? 0.102 : 0.14)
+          measuredDotDiameter * 1.08,
+          fontSize * 0.14
         ))
       );
       const dotRadius = dotDiameter * 0.5;
       const baselineY = sectionTitleBaselineProbe
         ? sectionTitleBaselineProbe.getBoundingClientRect().top
         : null;
+      const measuredDotCenterY = rect.top + rect.height * 0.5;
       const dotY = Number.isFinite(baselineY)
-        ? baselineY - dotRadius * (isMobile ? 2.92 : 0.88)
-        : rect.top + rect.height * 0.5 + (isMobile ? 0 : 3);
-      return {
+        ? baselineY - dotRadius * 0.88
+        : measuredDotCenterY + 3;
+      const target = {
         x: rect.left + rect.width * 0.5,
         y: dotY,
         radius: dotRadius
       };
+      return target;
     };
 
     const bindSectionTitleDotParticle = () => {
       sectionTitleDotParticle = null;
       if (!sectionTitleDotAnchor || !particles.length) return;
+      const isMobile = (viewportW || window.innerWidth) < 768;
+      if (isMobile) return;
 
       let candidate = particles[0];
       let bestScore = -Infinity;
@@ -976,11 +990,13 @@
 
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
-        const sectionDotStart = isMobile ? 0.36 : 0.64;
-        const sectionDotSpan = isMobile ? 0.2 : 0.3;
+        const sectionDotStart = 0.64;
+        const sectionDotSpan = 0.3;
         const sectionDotLockRaw = clamp01((scatter - sectionDotStart) / sectionDotSpan);
         const sectionDotLockMix = sectionDotLockRaw * sectionDotLockRaw * (3 - 2 * sectionDotLockRaw);
-        const sectionDotMix = p === sectionTitleDotParticle ? sectionDotLockMix : 0;
+        const sectionDotMix = !isMobile && p === sectionTitleDotParticle
+          ? sectionDotLockMix
+          : 0;
         const sectionDotAmbientScale = 1 - sectionDotMix;
 
         const formedX = lerp(p.startX, p.homeX, intro);
