@@ -143,6 +143,9 @@
   let autoScrollInProgress = false;
   let lockedScrollY = 0;
   let mobileAutoScatterSlowUntil = 0;
+  let scriptedScrollRaf = 0;
+  let wheelSmoothRaf = 0;
+  let wheelSmoothTargetY = getScrollY();
   const scrollKeys = new Set([
     "ArrowUp",
     "ArrowDown",
@@ -154,6 +157,67 @@
     "Spacebar"
   ]);
 
+  const isDesktopViewport = () => !isCoarsePointer && window.innerWidth >= 768;
+  const getMaxScrollY = () => {
+    const doc = document.documentElement;
+    if (!doc) return 0;
+    return Math.max(0, doc.scrollHeight - window.innerHeight);
+  };
+  const clampScrollY = (value) => Math.max(0, Math.min(getMaxScrollY(), value));
+  const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2);
+
+  const cancelScriptedScroll = () => {
+    if (!scriptedScrollRaf) return;
+    cancelAnimationFrame(scriptedScrollRaf);
+    scriptedScrollRaf = 0;
+  };
+
+  const stopWheelSmoothing = () => {
+    if (!wheelSmoothRaf) return;
+    cancelAnimationFrame(wheelSmoothRaf);
+    wheelSmoothRaf = 0;
+  };
+
+  const smoothScrollToY = (targetY, opts = {}) =>
+    new Promise((resolve) => {
+      const clampedTarget = clampScrollY(targetY);
+      const duration = typeof opts.duration === "number" ? opts.duration : 1120;
+
+      if (prefersReduced || !isDesktopViewport()) {
+        window.scrollTo({ top: clampedTarget, left: 0, behavior: "auto" });
+        resolve();
+        return;
+      }
+
+      cancelScriptedScroll();
+      const startY = getScrollY();
+      const distance = clampedTarget - startY;
+      if (Math.abs(distance) < 1) {
+        window.scrollTo({ top: clampedTarget, left: 0, behavior: "auto" });
+        resolve();
+        return;
+      }
+
+      const startTime = performance.now();
+      const tick = (now) => {
+        const raw = (now - startTime) / duration;
+        const progress = Math.min(1, Math.max(0, raw));
+        const eased = easeInOutCubic(progress);
+        const nextY = startY + distance * eased;
+        window.scrollTo({ top: nextY, left: 0, behavior: "auto" });
+
+        if (progress >= 1) {
+          scriptedScrollRaf = 0;
+          window.scrollTo({ top: clampedTarget, left: 0, behavior: "auto" });
+          resolve();
+          return;
+        }
+        scriptedScrollRaf = requestAnimationFrame(tick);
+      };
+
+      scriptedScrollRaf = requestAnimationFrame(tick);
+    });
+
   const lockScrollInput = (event) => {
     if (!scrollLockActive) return;
     if (event.type === "keydown" && !scrollKeys.has(event.key)) return;
@@ -162,7 +226,14 @@
 
   const setScrollLock = (active) => {
     scrollLockActive = active;
-    if (active) lockedScrollY = getScrollY();
+    if (active) {
+      lockedScrollY = getScrollY();
+      cancelScriptedScroll();
+      stopWheelSmoothing();
+      wheelSmoothTargetY = lockedScrollY;
+    } else {
+      wheelSmoothTargetY = getScrollY();
+    }
   };
 
   const enforceScrollLock = () => {
@@ -172,10 +243,60 @@
     window.scrollTo({ top: lockedScrollY, left: 0, behavior: "auto" });
   };
 
+  const runWheelSmoothing = () => {
+    const targetY = clampScrollY(wheelSmoothTargetY);
+    const currentY = getScrollY();
+    const nextY = currentY + (targetY - currentY) * 0.18;
+
+    if (Math.abs(targetY - nextY) < 0.5) {
+      wheelSmoothRaf = 0;
+      window.scrollTo({ top: targetY, left: 0, behavior: "auto" });
+      return;
+    }
+
+    window.scrollTo({ top: nextY, left: 0, behavior: "auto" });
+    wheelSmoothRaf = requestAnimationFrame(runWheelSmoothing);
+  };
+
+  const smoothDesktopWheel = (event) => {
+    if (!isDesktopViewport() || prefersReduced) return;
+    if (scrollLockActive || autoScrollInProgress) return;
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey) return;
+    if (!Number.isFinite(event.deltaY) || event.deltaY === 0) return;
+
+    event.preventDefault();
+    const normalizedDelta = event.deltaMode === 1
+      ? event.deltaY * 16
+      : event.deltaMode === 2
+        ? event.deltaY * window.innerHeight
+        : event.deltaY;
+    const maxStep = window.innerHeight * 0.85;
+    const step = Math.max(-maxStep, Math.min(maxStep, normalizedDelta * 0.92));
+
+    if (!wheelSmoothRaf) {
+      wheelSmoothTargetY = getScrollY();
+    }
+    wheelSmoothTargetY = clampScrollY(wheelSmoothTargetY + step);
+
+    if (!wheelSmoothRaf) {
+      wheelSmoothRaf = requestAnimationFrame(runWheelSmoothing);
+    }
+  };
+
+  const syncWheelTargetToNativeScroll = () => {
+    if (scrollLockActive || autoScrollInProgress || wheelSmoothRaf) return;
+    wheelSmoothTargetY = getScrollY();
+  };
+
   window.addEventListener("wheel", lockScrollInput, { passive: false, capture: true });
+  window.addEventListener("wheel", smoothDesktopWheel, { passive: false });
   window.addEventListener("touchmove", lockScrollInput, { passive: false, capture: true });
   window.addEventListener("keydown", lockScrollInput, { capture: true });
   window.addEventListener("scroll", enforceScrollLock, { passive: true });
+  window.addEventListener("scroll", syncWheelTargetToNativeScroll, { passive: true });
+  window.addEventListener("resize", () => {
+    wheelSmoothTargetY = clampScrollY(wheelSmoothTargetY);
+  }, { passive: true });
 
   const waitForScrollSettle = (targetY, timeoutMs = 2200) =>
     new Promise((resolve) => {
@@ -416,23 +537,22 @@
       try {
         autoScrollInProgress = true;
         const isMobile = window.innerWidth < 768;
-        const behavior = prefersReduced || isMobile ? "auto" : "smooth";
         if (isMobile) {
           mobileAutoScatterSlowUntil = performance.now() + 1100;
         }
-        const targetY = workSection.getBoundingClientRect().top + getScrollY();
-
-        workSection.scrollIntoView({ behavior, block: "start" });
+        const targetY = clampScrollY(workSection.getBoundingClientRect().top + getScrollY());
 
         let footerIntroPromise;
-        if (behavior === "smooth" && !isMobile) {
+        if (!prefersReduced && !isMobile) {
           footerIntroPromise = (async () => {
             await waitForDistanceToTarget(targetY, window.innerHeight * 0.28);
             revealFooterShell();
             return animateFooterLogo();
           })();
-          await waitForScrollSettle(targetY);
+          await smoothScrollToY(targetY, { duration: 1120 });
+          await waitForScrollSettle(targetY, 900);
         } else {
+          window.scrollTo({ top: targetY, left: 0, behavior: "auto" });
           await new Promise((resolve) => requestAnimationFrame(resolve));
         }
 
