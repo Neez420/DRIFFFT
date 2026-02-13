@@ -197,6 +197,8 @@
   let footerLogoAnimated = false;
   let footerLogoVisible = false;
   let footerIntroPrepared = false;
+  let footerVisibilityTimeline = null;
+  let footerHasPlayedIntro = false;
 
   const prepareFooterIntro = () => {
     if (footerIntroPrepared || !footerEl) return;
@@ -217,6 +219,7 @@
       });
     }
     footerLogoVisible = false;
+    footerHasPlayedIntro = false;
   };
 
   const revealFooterShell = () => {
@@ -237,32 +240,46 @@
     } = opts;
 
     footerLogoVisible = visible;
+    if (footerVisibilityTimeline) {
+      footerVisibilityTimeline.kill();
+      footerVisibilityTimeline = null;
+    }
     gsap.killTweensOf(footerAnimTargets);
 
     if (visible) {
-      if (footerLogoChars.length) {
-        gsap.set(footerLogoChars, {
-          x: -28,
-          y: 0,
-          opacity: 0.2,
-          filter: "blur(10px)"
-        });
-      }
-      if (footerTextEls.length) {
-        gsap.set(footerTextEls, {
-          x: -16,
-          y: 0,
-          opacity: 0.16,
-          filter: "blur(8px)"
-        });
+      const shouldResetStart = opts.force || !footerHasPlayedIntro;
+      if (shouldResetStart) {
+        if (footerLogoChars.length) {
+          gsap.set(footerLogoChars, {
+            x: -28,
+            y: 0,
+            opacity: 0.2,
+            filter: "blur(10px)"
+          });
+        }
+        if (footerTextEls.length) {
+          gsap.set(footerTextEls, {
+            x: -16,
+            y: 0,
+            opacity: 0.16,
+            filter: "blur(8px)"
+          });
+        }
       }
 
       return new Promise((resolve) => {
-        const tl = gsap.timeline({ onComplete: resolve });
+        const tl = gsap.timeline({
+          onComplete: () => {
+            footerHasPlayedIntro = true;
+            if (footerVisibilityTimeline === tl) footerVisibilityTimeline = null;
+            resolve();
+          }
+        });
+        footerVisibilityTimeline = tl;
         const logoRevealSpan = footerLogoChars.length
           ? duration + Math.max(0, footerLogoChars.length - 1) * stagger
           : 0;
-        const textRevealStart = footerLogoChars.length ? logoRevealSpan + 0.06 : 0;
+        const textRevealStart = footerLogoChars.length ? logoRevealSpan + 0.01 : 0;
 
         if (footerLogoChars.length) {
           tl.to(footerLogoChars, {
@@ -290,7 +307,38 @@
     }
 
     return new Promise((resolve) => {
-      const tl = gsap.timeline({ onComplete: resolve });
+      const tl = gsap.timeline({
+        onComplete: () => {
+          if (footerVisibilityTimeline === tl) footerVisibilityTimeline = null;
+          resolve();
+        }
+      });
+      footerVisibilityTimeline = tl;
+      const textMainDuration = Math.max(0.16, duration * 0.68);
+      const textFadeDuration = Math.max(0.08, duration * 0.24);
+      const textFadeStart = textMainDuration;
+      const textExitSpan = footerTextEls.length
+        ? textFadeStart + textFadeDuration + Math.max(0, footerTextEls.length - 1) * 0.02
+        : 0;
+      const logoStart = footerTextEls.length ? textExitSpan + 0.02 : 0;
+
+      if (footerTextEls.length) {
+        tl.to(footerTextEls, {
+          x: -12,
+          y: -2,
+          opacity: 0.14,
+          filter: "blur(7px)",
+          duration: textMainDuration,
+          stagger: { each: 0.03, from: "end" },
+          ease: "power2.out"
+        }, 0);
+        tl.to(footerTextEls, {
+          opacity: 0,
+          duration: textFadeDuration,
+          stagger: { each: 0.02, from: "end" },
+          ease: "power1.out"
+        }, textFadeStart);
+      }
       if (footerLogoChars.length) {
         tl.to(footerLogoChars, {
           x: -20,
@@ -300,30 +348,13 @@
           duration: duration * 0.72,
           stagger: { each: stagger, from: "end" },
           ease: "power2.out"
-        }, 0);
+        }, logoStart);
         tl.to(footerLogoChars, {
           opacity: 0,
           duration: Math.max(0.1, duration * 0.28),
           stagger: { each: stagger * 0.7, from: "end" },
           ease: "power1.out"
-        }, duration * 0.72);
-      }
-      if (footerTextEls.length) {
-        tl.to(footerTextEls, {
-          x: -12,
-          y: -2,
-          opacity: 0.14,
-          filter: "blur(7px)",
-          duration: Math.max(0.16, duration * 0.68),
-          stagger: { each: 0.03, from: "end" },
-          ease: "power2.out"
-        }, 0);
-        tl.to(footerTextEls, {
-          opacity: 0,
-          duration: Math.max(0.08, duration * 0.24),
-          stagger: { each: 0.02, from: "end" },
-          ease: "power1.out"
-        }, Math.max(0.16, duration * 0.68));
+        }, logoStart + duration * 0.72);
       }
     });
   };
@@ -380,9 +411,10 @@
           await new Promise((resolve) => requestAnimationFrame(resolve));
         }
 
-        await flashMobileWorkCards();
         revealFooterShell();
-        await animateFooterLogo();
+        const footerIntroPromise = animateFooterLogo();
+        const mobileSweepPromise = flashMobileWorkCards();
+        await Promise.all([footerIntroPromise, mobileSweepPromise]);
       } finally {
         autoScrollInProgress = false;
         setScrollLock(false);
@@ -394,6 +426,8 @@
     let logoScrollRaf = 0;
     let lastLogoScrollY = getScrollY();
     let lastDirection = 0;
+    let lastDirectionFlipAt = 0;
+    const directionFlipHoldMs = 120;
 
     const syncFooterLogoByScroll = () => {
       logoScrollRaf = 0;
@@ -409,7 +443,10 @@
 
       const direction = delta > 0 ? 1 : -1;
       if (direction === lastDirection) return;
+      const now = performance.now();
+      if (now - lastDirectionFlipAt < directionFlipHoldMs) return;
       lastDirection = direction;
+      lastDirectionFlipAt = now;
 
       if (direction < 0) {
         setFooterLogoVisibility(false, { duration: 0.28, stagger: 0.03 });
