@@ -273,6 +273,35 @@ main {
   will-change: transform, opacity, filter;
 }
 
+.section-title-dot-anchor {
+  display: inline-block;
+  color: transparent;
+  user-select: none;
+}
+
+.section-title-dot-probe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  text-transform: inherit;
+  user-select: none;
+}
+
+.section-title-baseline-probe {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
 .section-sub {
  /* margin-top: 10px; */
  padding-left: 16px;

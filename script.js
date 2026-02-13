@@ -80,6 +80,9 @@
   const enjoyPrefixEl = enjoyEl?.querySelector(".hero-enjoy-prefix") ?? null;
   const enjoyAccentEl = enjoyEl?.querySelector(".hero-enjoy-accent") ?? null;
   const workSection = document.getElementById("work");
+  const sectionTitleDotAnchor = document.querySelector(".section-title-dot-anchor");
+  const sectionTitleBaselineProbe = document.querySelector(".section-title-baseline-probe");
+  const sectionTitleDotProbe = document.querySelector(".section-title-dot-probe");
   const workCards = Array.from(document.querySelectorAll(".work-item"));
   const footerEl = document.querySelector(".footer");
   const footerLogoChars = Array.from(document.querySelectorAll(".brand-logo-char"));
@@ -507,6 +510,7 @@
     let lastBuildW = 0;
     let lastBuildH = 0;
     let scatterVisual = 0;
+    let sectionTitleDotParticle = null;
     const pointer = {
       x: 0,
       y: 0,
@@ -530,6 +534,109 @@
     };
 
     const rand = (min, max) => min + Math.random() * (max - min);
+    const parseCssRgb = (cssColor) => {
+      if (!cssColor) return null;
+      const m = cssColor.match(/rgba?\(([^)]+)\)/i);
+      if (!m) return null;
+      const parts = m[1].split(",").map((v) => Number.parseFloat(v.trim()));
+      if (parts.length < 3 || parts.some((v, i) => i < 3 && !Number.isFinite(v))) return null;
+      return {
+        r: Math.max(0, Math.min(255, Math.round(parts[0]))),
+        g: Math.max(0, Math.min(255, Math.round(parts[1]))),
+        b: Math.max(0, Math.min(255, Math.round(parts[2])))
+      };
+    };
+
+    const getSectionTitleDotColor = () => {
+      const colorSource = sectionTitleDotAnchor?.closest(".section-title") || sectionTitleDotAnchor;
+      const parsed = parseCssRgb(colorSource ? window.getComputedStyle(colorSource).color : "");
+      return parsed || { r: 245, g: 245, b: 245 };
+    };
+
+    const getSectionTitleDotTarget = () => {
+      let rect = null;
+
+      if (sectionTitleDotProbe) {
+        const probeTextNode = sectionTitleDotProbe.firstChild;
+        const probeText = probeTextNode?.nodeType === Node.TEXT_NODE ? probeTextNode.textContent || "" : "";
+        const dotIndex = probeText.lastIndexOf(".");
+        if (dotIndex >= 0) {
+          const probeRange = document.createRange();
+          probeRange.setStart(probeTextNode, dotIndex);
+          probeRange.setEnd(probeTextNode, dotIndex + 1);
+          rect = probeRange.getBoundingClientRect();
+          probeRange.detach?.();
+        }
+      }
+
+      if (!rect || (!rect.width && !rect.height)) {
+        if (!sectionTitleDotAnchor) return null;
+        const textNode = sectionTitleDotAnchor.firstChild;
+        if (textNode && textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
+          const range = document.createRange();
+          range.setStart(textNode, 0);
+          range.setEnd(textNode, 1);
+          rect = range.getBoundingClientRect();
+          range.detach?.();
+        }
+      }
+
+      if ((!rect || (!rect.width && !rect.height)) && sectionTitleDotAnchor) {
+        rect = sectionTitleDotAnchor.getBoundingClientRect();
+      }
+      if (!rect.width && !rect.height) return null;
+      const fontSize = parseFloat(window.getComputedStyle(sectionTitleDotAnchor).fontSize) || rect.height;
+      const maxDotDiameter = viewportW < 768 ? 20 : 30;
+      const minDotDiameter = viewportW < 768 ? 8 : 11;
+      const dotDiameter = Math.max(
+        minDotDiameter,
+        Math.min(maxDotDiameter, Math.max(rect.width * 1.1, fontSize * 0.14))
+      );
+      const dotRadius = dotDiameter * 0.5;
+      const baselineY = sectionTitleBaselineProbe
+        ? sectionTitleBaselineProbe.getBoundingClientRect().top
+        : null;
+      const dotY = Number.isFinite(baselineY)
+        ? baselineY - dotRadius * 0.88
+        : rect.top + rect.height * 0.5 + (viewportW < 768 ? 2 : 3);
+      return {
+        x: rect.left + rect.width * 0.5,
+        y: dotY,
+        radius: dotRadius
+      };
+    };
+
+    const bindSectionTitleDotParticle = () => {
+      sectionTitleDotParticle = null;
+      if (!sectionTitleDotAnchor || !particles.length) return;
+
+      let candidate = particles[0];
+      let bestScore = -Infinity;
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        const score = p.homeX * 1.6 + p.homeY;
+        if (score > bestScore) {
+          bestScore = score;
+          candidate = p;
+        }
+      }
+      if (!candidate) return;
+
+      const sectionDotColor = getSectionTitleDotColor();
+      candidate.r = sectionDotColor.r;
+      candidate.g = sectionDotColor.g;
+      candidate.b = sectionDotColor.b;
+      candidate.alpha = Math.max(candidate.alpha, 0.95);
+      candidate.size = Math.max(candidate.size, viewportW < 768 ? 1.2 : 1.35);
+      candidate.scatterZ = 0;
+      sectionTitleDotParticle = candidate;
+
+      const target = getSectionTitleDotTarget();
+      if (!target) return;
+      sectionTitleDotParticle.scatterX = target.x;
+      sectionTitleDotParticle.scatterY = target.y;
+      sectionTitleDotParticle.sectionDotRadius = target.radius;
+    };
 
     const buildParticles = (force = false) => {
       viewportW = window.innerWidth;
@@ -638,6 +745,11 @@
       } else {
         particles = built;
       }
+      if (particles.length) {
+        bindSectionTitleDotParticle();
+      } else {
+        sectionTitleDotParticle = null;
+      }
       if (!particles.length) {
         scatterVisual = state.scatter;
       }
@@ -680,9 +792,19 @@
       const cx = viewportW / 2;
       const cy = viewportH / 2;
       const perspective = 760;
+      const sectionDotTarget = getSectionTitleDotTarget();
+      if (sectionTitleDotParticle && sectionDotTarget) {
+        sectionTitleDotParticle.scatterX = sectionDotTarget.x;
+        sectionTitleDotParticle.scatterY = sectionDotTarget.y;
+        sectionTitleDotParticle.sectionDotRadius = sectionDotTarget.radius;
+      }
 
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
+        const sectionDotLockRaw = clamp01((scatter - 0.64) / 0.3);
+        const sectionDotLockMix = sectionDotLockRaw * sectionDotLockRaw * (3 - 2 * sectionDotLockRaw);
+        const sectionDotMix = p === sectionTitleDotParticle ? sectionDotLockMix : 0;
+        const sectionDotAmbientScale = 1 - sectionDotMix;
 
         const formedX = lerp(p.startX, p.homeX, intro);
         const formedY = lerp(p.startY, p.homeY, intro);
@@ -692,9 +814,9 @@
         const explodedY = lerp(p.homeY, p.scatterY, explode);
         const explodedZ = lerp(0, p.scatterZ, explode);
 
-        const ambientX = Math.sin(t * p.driftFreqX + p.driftPhaseX) * p.driftAmpX * ambient;
-        const ambientY = Math.cos(t * p.driftFreqY + p.driftPhaseY) * p.driftAmpY * ambient;
-        const ambientZ = Math.sin(t * p.driftFreqZ + p.driftPhaseZ) * p.driftAmpZ * ambient;
+        const ambientX = Math.sin(t * p.driftFreqX + p.driftPhaseX) * p.driftAmpX * ambient * sectionDotAmbientScale;
+        const ambientY = Math.cos(t * p.driftFreqY + p.driftPhaseY) * p.driftAmpY * ambient * sectionDotAmbientScale;
+        const ambientZ = Math.sin(t * p.driftFreqZ + p.driftPhaseZ) * p.driftAmpZ * ambient * sectionDotAmbientScale;
 
         const x = lerp(formedX, explodedX, scatter) + ambientX;
         const y = lerp(formedY, explodedY, scatter) + ambientY;
@@ -741,15 +863,28 @@
           }
         }
 
+        if (p === sectionTitleDotParticle && sectionDotTarget) {
+          drawWorldX = lerp(drawWorldX, sectionDotTarget.x, sectionDotMix);
+          drawWorldY = lerp(drawWorldY, sectionDotTarget.y, sectionDotMix);
+          drawWorldZ = lerp(drawWorldZ, 0, sectionDotMix);
+        }
+
         const depth = perspective / Math.max(120, perspective - drawWorldZ);
         const drawX = cx + (drawWorldX - cx) * depth;
         const drawY = cy + (drawWorldY - cy) * depth;
 
-        const alpha = p.alpha * intro * fade + alphaBoost;
+        let alpha = p.alpha * intro * fade + alphaBoost;
+        if (p === sectionTitleDotParticle) {
+          alpha = lerp(alpha, intro, sectionDotMix);
+        }
         if (alpha < 0.02) continue;
 
         const explodeSizeBoost = isMobile ? 0.36 : 0.6;
-        const radius = p.size * (0.85 + explode * explodeSizeBoost) * Math.max(0.68, Math.min(1.8, depth));
+        let radius = p.size * (0.85 + explode * explodeSizeBoost) * Math.max(0.68, Math.min(1.8, depth));
+        if (p === sectionTitleDotParticle && p.sectionDotRadius) {
+          const anchoredRadius = p.sectionDotRadius * Math.max(0.72, Math.min(1.34, depth));
+          radius = lerp(radius, anchoredRadius, sectionDotMix);
+        }
 
         ctx.fillStyle = `rgba(${p.r}, ${p.g}, ${p.b}, ${alpha})`;
         ctx.beginPath();
