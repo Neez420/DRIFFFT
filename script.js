@@ -432,8 +432,6 @@
             return animateFooterLogo();
           })();
           await waitForScrollSettle(targetY);
-        } else if (behavior === "smooth") {
-          await waitForScrollSettle(targetY);
         } else {
           await new Promise((resolve) => requestAnimationFrame(resolve));
         }
@@ -537,6 +535,8 @@
     let lastBuildH = 0;
     let scatterVisual = 0;
     let sectionTitleDotParticle = null;
+    let cachedSectionTitleDotTarget = null;
+    let sectionDotLayoutRaf = 0;
     const pointer = {
       x: 0,
       y: 0,
@@ -612,7 +612,8 @@
       }
       if (!rect.width && !rect.height) return null;
       const fontSize = parseFloat(window.getComputedStyle(sectionTitleDotAnchor).fontSize) || rect.height;
-      const isMobile = viewportW < 768;
+      const layoutWidth = viewportW || window.innerWidth || 0;
+      const isMobile = layoutWidth < 768;
       const maxDotDiameter = isMobile ? 9 : 30;
       const minDotDiameter = isMobile ? 4 : 11;
       const dotDiameter = Math.max(
@@ -661,11 +662,28 @@
       candidate.scatterZ = 0;
       sectionTitleDotParticle = candidate;
 
-      const target = getSectionTitleDotTarget();
+      const target = cachedSectionTitleDotTarget || getSectionTitleDotTarget();
       if (!target) return;
       sectionTitleDotParticle.scatterX = target.x;
       sectionTitleDotParticle.scatterY = target.y;
       sectionTitleDotParticle.sectionDotRadius = target.radius;
+    };
+
+    const refreshSectionTitleDotLayout = () => {
+      cachedSectionTitleDotTarget = getSectionTitleDotTarget();
+      if (sectionTitleDotParticle && cachedSectionTitleDotTarget) {
+        sectionTitleDotParticle.scatterX = cachedSectionTitleDotTarget.x;
+        sectionTitleDotParticle.scatterY = cachedSectionTitleDotTarget.y;
+        sectionTitleDotParticle.sectionDotRadius = cachedSectionTitleDotTarget.radius;
+      }
+    };
+
+    const scheduleSectionTitleDotLayoutRefresh = () => {
+      if (sectionDotLayoutRaf) return;
+      sectionDotLayoutRaf = requestAnimationFrame(() => {
+        sectionDotLayoutRaf = 0;
+        refreshSectionTitleDotLayout();
+      });
     };
 
     const buildParticles = (force = false) => {
@@ -771,7 +789,7 @@
         }
       }
 
-      const maxParticles = viewportW < 640 ? 2400 : 2800;
+      const maxParticles = 2800;
       if (built.length > maxParticles) {
         const stride = Math.ceil(built.length / maxParticles);
         particles = built.filter((_, i) => i % stride === 0);
@@ -786,6 +804,7 @@
       if (!particles.length) {
         scatterVisual = state.scatter;
       }
+      refreshSectionTitleDotLayout();
       lastBuildW = viewportW;
       lastBuildH = viewportH;
     };
@@ -828,7 +847,7 @@
       const cx = viewportW / 2;
       const cy = viewportH / 2;
       const perspective = 760;
-      const sectionDotTarget = getSectionTitleDotTarget();
+      const sectionDotTarget = cachedSectionTitleDotTarget;
       if (sectionTitleDotParticle && sectionDotTarget) {
         sectionTitleDotParticle.scatterX = sectionDotTarget.x;
         sectionTitleDotParticle.scatterY = sectionDotTarget.y;
@@ -943,13 +962,20 @@
     let resizeRaf = 0;
     const onResize = () => {
       cancelAnimationFrame(resizeRaf);
-      resizeRaf = requestAnimationFrame(() => buildParticles(false));
+      resizeRaf = requestAnimationFrame(() => {
+        buildParticles(false);
+        refreshSectionTitleDotLayout();
+      });
     };
 
     window.addEventListener("pointermove", onPointerMove, { passive: true });
     window.addEventListener("pointerleave", onPointerLeave);
     window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("scroll", scheduleSectionTitleDotLayoutRefresh, { passive: true });
     window.addEventListener("resize", onResize);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(scheduleSectionTitleDotLayoutRefresh).catch(() => {});
+    }
     buildParticles(true);
     render();
 
@@ -959,9 +985,11 @@
       destroy: () => {
         cancelAnimationFrame(rafId);
         cancelAnimationFrame(resizeRaf);
+        cancelAnimationFrame(sectionDotLayoutRaf);
         window.removeEventListener("pointermove", onPointerMove);
         window.removeEventListener("pointerleave", onPointerLeave);
         window.removeEventListener("touchstart", onTouchStart);
+        window.removeEventListener("scroll", scheduleSectionTitleDotLayoutRefresh);
         window.removeEventListener("resize", onResize);
         ctxCanvas.remove();
       }

@@ -1,18 +1,9 @@
 /* DRIFFFT site styles */
 :root {
-  --bg: #000000;
-  --bg2: #020202;
   --text: #ffffff;
   --muted: rgba(255, 255, 255, .6);
   --stroke: rgba(255, 255, 255, .08);
-  --shadow: 0 0 0 transparent;
-  --shadow2: 0 20px 40px rgba(0, 70, 255, .05);
-  --r: 2px;
-  --r2: 4px;
   --max: 1120px;
-  --accent1: #0047FF;
-  --accent2: #00E5FF;
-  --accent3: #5200FF;
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
@@ -303,8 +294,7 @@ main {
 }
 
 .section-sub {
- /* margin-top: 10px; */
- padding-left: 16px;
+  padding-left: 16px;
   font-family: "Fraunces", serif;
   font-style: italic;
   font-weight: 500;
@@ -313,23 +303,6 @@ main {
   max-width: 62ch;
   color: rgba(233, 236, 245, .82);
   will-change: transform, opacity, filter;
-}
-
-.grid {
-  width: min(var(--max), calc(100% - 32px));
-  margin: 0 auto;
-  display: grid;
-  gap: 14px;
-}
-
-.grid-2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-@media (max-width: 920px) {
-  .grid-2 {
-    grid-template-columns: 1fr;
-  }
 }
 
 .work-list {
@@ -493,10 +466,6 @@ main {
   text-transform: uppercase;
 }
 
-.soft {
-  opacity: .7;
-}
-
 .footer-note {
   display: inline-block;
   margin-top: 0;
@@ -536,13 +505,6 @@ main {
   display: inline-flex;
   align-items: baseline;
   gap: 14px;
-}
-
-.brand-text {
-  display: inline-block;
-  font-size: 20px;
-  line-height: 1;
-  letter-spacing: 0.02em;
 }
 
 .brand-logo {
@@ -650,10 +612,6 @@ main {
     justify-self: start;
     align-self: start;
     gap: 0;
-  }
-
-  .brand-text {
-    font-size: 18px;
   }
 
   .brand-logo {
