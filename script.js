@@ -909,7 +909,7 @@
         }
       }
 
-      const maxParticles = isMobile ? 1400 : 2100;
+      const maxParticles = isMobile ? 1800 : 2100;
       if (built.length > maxParticles) {
         const stride = Math.ceil(built.length / maxParticles);
         particles = built.filter((_, i) => i % stride === 0);
