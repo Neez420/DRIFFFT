@@ -737,7 +737,10 @@
             driftFreqZ: rand(0.1, 0.32),
             driftPhaseX: rand(0, Math.PI * 2),
             driftPhaseY: rand(0, Math.PI * 2),
-            driftPhaseZ: rand(0, Math.PI * 2)
+            driftPhaseZ: rand(0, Math.PI * 2),
+            swirlPhase: rand(0, Math.PI * 2),
+            swirlOffsetX: 0,
+            swirlOffsetY: 0
           });
         }
       }
@@ -790,7 +793,10 @@
       const rippleEndFade = 1 - clamp01((rippleProgress - 0.82) / 0.18);
       const rippleEnvelope = rippleStartFade * rippleEndFade;
       const t = performance.now() * 0.001;
-      const pointerRadius = Math.max(120, Math.min(260, viewportW * 0.16));
+      const pointerRadius = Math.max(96, Math.min(220, viewportW * 0.15));
+      const pointerSwirlRadiusMax = isMobile ? 0 : 3.4;
+      const pointerSwirlSpeed = 4.4;
+      const pointerSwirlEase = 0.18;
       const pointerReady = !isMobile && pointer.active && scatter < 0.2;
 
       const cx = viewportW / 2;
@@ -855,19 +861,27 @@
         }
 
         if (pointerReady && intro > 0.72) {
-          const dx = drawWorldX - pointer.x;
-          const dy = drawWorldY - pointer.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist < pointerRadius) {
-            const n = 1 - dist / pointerRadius;
+          const dxPointer = p.homeX - pointer.x;
+          const dyPointer = p.homeY - pointer.y;
+          const distPointer = Math.hypot(dxPointer, dyPointer);
+          let swirlTargetX = 0;
+          let swirlTargetY = 0;
+          if (distPointer < pointerRadius) {
+            const n = 1 - distPointer / pointerRadius;
             const falloff = n * n;
-            const invDist = 1 / Math.max(1, dist);
-            const push = (24 + 30 * scatter) * falloff;
-            drawWorldX += dx * invDist * push;
-            drawWorldY += dy * invDist * push;
-            drawWorldZ += (66 + 110 * scatter) * falloff;
+            const swirlRadius = pointerSwirlRadiusMax * falloff;
+            const swirlAngle = t * pointerSwirlSpeed + p.swirlPhase;
+            swirlTargetX = Math.cos(swirlAngle) * swirlRadius;
+            swirlTargetY = Math.sin(swirlAngle) * swirlRadius;
           }
+          p.swirlOffsetX = lerp(p.swirlOffsetX || 0, swirlTargetX, pointerSwirlEase);
+          p.swirlOffsetY = lerp(p.swirlOffsetY || 0, swirlTargetY, pointerSwirlEase);
+        } else {
+          p.swirlOffsetX = lerp(p.swirlOffsetX || 0, 0, pointerSwirlEase);
+          p.swirlOffsetY = lerp(p.swirlOffsetY || 0, 0, pointerSwirlEase);
         }
+        drawWorldX += p.swirlOffsetX;
+        drawWorldY += p.swirlOffsetY;
 
         if (p === sectionTitleDotParticle && sectionDotTarget) {
           drawWorldX = lerp(drawWorldX, sectionDotTarget.x, sectionDotMix);
@@ -891,7 +905,6 @@
           const anchoredRadius = p.sectionDotRadius * (isMobile ? 1 : Math.max(0.72, Math.min(1.34, depth)));
           radius = lerp(radius, anchoredRadius, sectionDotMix);
         }
-
         ctx.fillStyle = `rgba(${p.r}, ${p.g}, ${p.b}, ${alpha})`;
         ctx.beginPath();
         ctx.arc(drawX * dpr, drawY * dpr, radius * dpr, 0, Math.PI * 2);
