@@ -8,22 +8,40 @@
   <meta name="description"
     content="DRIFFFT is the parent company behind WeightUp and Flowboard. Design and development, obsessively crafted." />
   <title>DRIFFFT</title>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-N8S62D6FFT"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag() { dataLayer.push(arguments); }
-    gtag('js', new Date());
+    const loadAnalytics = () => {
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = "https://www.googletagmanager.com/gtag/js?id=G-N8S62D6FFT";
+      script.onload = () => {
+        gtag("js", new Date());
+        gtag("config", "G-N8S62D6FFT");
+      };
+      document.head.appendChild(script);
+    };
 
-    gtag('config', 'G-N8S62D6FFT');
+    window.addEventListener("load", () => {
+      if ("requestIdleCallback" in window) {
+        requestIdleCallback(loadAnalytics, { timeout: 2600 });
+      } else {
+        setTimeout(loadAnalytics, 1200);
+      }
+    }, { once: true });
   </script>
   <link rel="icon" type="image/png" href="assets/logos/Favicon.png" />
   <link rel="apple-touch-icon" href="assets/logos/Webclip.png" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Inter:wght@300;400;500;600;700;800&display=swap"
-    rel="stylesheet">
+  <link rel="preload"
+    href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Inter:wght@300;400;500;600;700;800&display=swap"
+    as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript>
+    <link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Inter:wght@300;400;500;600;700;800&display=swap">
+  </noscript>
 
   <link rel="stylesheet" href="styles.css" />
 </head>
