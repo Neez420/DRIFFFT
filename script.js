@@ -80,6 +80,11 @@
   const enjoyPrefixEl = enjoyEl?.querySelector(".hero-enjoy-prefix") ?? null;
   const enjoyAccentEl = enjoyEl?.querySelector(".hero-enjoy-accent") ?? null;
   const workSection = document.getElementById("work");
+  const workCards = Array.from(document.querySelectorAll(".work-item"));
+  const footerEl = document.querySelector(".footer");
+  const footerLogoChars = Array.from(document.querySelectorAll(".brand-logo-char"));
+  const footerTextEls = Array.from(document.querySelectorAll(".footer-note, .footer-right .mono"));
+  const footerAnimTargets = [...footerLogoChars, ...footerTextEls];
 
   const buildEnjoyLetters = () => {
     if (!enjoyPrefixEl) return [];
@@ -134,6 +139,7 @@
   let scrollLockActive = false;
   let autoScrollInProgress = false;
   let lockedScrollY = 0;
+  let mobileAutoScatterSlowUntil = 0;
   const scrollKeys = new Set([
     "ArrowUp",
     "ArrowDown",
@@ -187,14 +193,183 @@
       requestAnimationFrame(tick);
     });
 
+  const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+  let footerLogoAnimated = false;
+  let footerLogoVisible = false;
+  let footerIntroPrepared = false;
+
+  const prepareFooterIntro = () => {
+    if (footerIntroPrepared || !footerEl) return;
+    footerIntroPrepared = true;
+    footerEl.classList.add("is-preintro-hidden");
+    if (canUseGsap && footerAnimTargets.length) {
+      gsap.set(footerLogoChars, {
+        x: -28,
+        y: 0,
+        opacity: 0,
+        filter: "blur(10px)"
+      });
+      gsap.set(footerTextEls, {
+        x: -16,
+        y: 0,
+        opacity: 0,
+        filter: "blur(8px)"
+      });
+    }
+    footerLogoVisible = false;
+  };
+
+  const revealFooterShell = () => {
+    if (!footerEl) return;
+    footerEl.classList.remove("is-preintro-hidden");
+  };
+
+  const setFooterLogoVisibility = (visible, opts = {}) => {
+    if (prefersReduced || !canUseGsap || !footerAnimTargets.length) {
+      footerLogoVisible = visible;
+      return Promise.resolve();
+    }
+    if (!opts.force && footerLogoVisible === visible) return Promise.resolve();
+
+    const {
+      duration = visible ? 0.5 : 0.34,
+      stagger = visible ? 0.085 : 0.04
+    } = opts;
+
+    footerLogoVisible = visible;
+    gsap.killTweensOf(footerAnimTargets);
+
+    if (visible) {
+      if (footerLogoChars.length) {
+        gsap.set(footerLogoChars, {
+          x: -28,
+          y: 0,
+          opacity: 0.2,
+          filter: "blur(10px)"
+        });
+      }
+      if (footerTextEls.length) {
+        gsap.set(footerTextEls, {
+          x: -16,
+          y: 0,
+          opacity: 0.16,
+          filter: "blur(8px)"
+        });
+      }
+
+      return new Promise((resolve) => {
+        const tl = gsap.timeline({ onComplete: resolve });
+        const logoRevealSpan = footerLogoChars.length
+          ? duration + Math.max(0, footerLogoChars.length - 1) * stagger
+          : 0;
+        const textRevealStart = footerLogoChars.length ? logoRevealSpan + 0.06 : 0;
+
+        if (footerLogoChars.length) {
+          tl.to(footerLogoChars, {
+            x: 0,
+            y: 0,
+            opacity: 1,
+            filter: "blur(0px)",
+            duration,
+            stagger,
+            ease: "power3.out"
+          }, 0);
+        }
+        if (footerTextEls.length) {
+          tl.to(footerTextEls, {
+            x: 0,
+            y: 0,
+            opacity: 1,
+            filter: "blur(0px)",
+            duration: Math.max(0.28, duration - 0.08),
+            stagger: 0.05,
+            ease: "power3.out"
+          }, textRevealStart);
+        }
+      });
+    }
+
+    return new Promise((resolve) => {
+      const tl = gsap.timeline({ onComplete: resolve });
+      if (footerLogoChars.length) {
+        tl.to(footerLogoChars, {
+          x: -20,
+          y: -3,
+          opacity: 0.18,
+          filter: "blur(9px)",
+          duration: duration * 0.72,
+          stagger: { each: stagger, from: "end" },
+          ease: "power2.out"
+        }, 0);
+        tl.to(footerLogoChars, {
+          opacity: 0,
+          duration: Math.max(0.1, duration * 0.28),
+          stagger: { each: stagger * 0.7, from: "end" },
+          ease: "power1.out"
+        }, duration * 0.72);
+      }
+      if (footerTextEls.length) {
+        tl.to(footerTextEls, {
+          x: -12,
+          y: -2,
+          opacity: 0.14,
+          filter: "blur(7px)",
+          duration: Math.max(0.16, duration * 0.68),
+          stagger: { each: 0.03, from: "end" },
+          ease: "power2.out"
+        }, 0);
+        tl.to(footerTextEls, {
+          opacity: 0,
+          duration: Math.max(0.08, duration * 0.24),
+          stagger: { each: 0.02, from: "end" },
+          ease: "power1.out"
+        }, Math.max(0.16, duration * 0.68));
+      }
+    });
+  };
+
+  const animateFooterLogo = () => {
+    if (footerLogoAnimated || prefersReduced || !canUseGsap || !footerAnimTargets.length) return Promise.resolve();
+    footerLogoAnimated = true;
+    return setFooterLogoVisibility(true, { force: true, duration: 0.52, stagger: 0.085 });
+  };
+
+  let mobileCardFlashPlayed = false;
+  const flashMobileWorkCards = async () => {
+    if (mobileCardFlashPlayed || prefersReduced || window.innerWidth >= 768 || !workCards.length) return;
+    mobileCardFlashPlayed = true;
+    await sleep(500);
+
+    const sweepTotalMs = 680;
+    const edgeReachMs = 490;
+
+    for (let i = 0; i < workCards.length; i++) {
+      const card = workCards[i];
+      card.classList.remove("is-mobile-sweep");
+      void card.offsetWidth;
+      card.classList.add("is-mobile-sweep");
+
+      window.setTimeout(() => {
+        card.classList.remove("is-mobile-sweep");
+      }, sweepTotalMs + 40);
+
+      const waitMs = i < workCards.length - 1 ? edgeReachMs : sweepTotalMs + 40;
+      await sleep(waitMs);
+    }
+  };
+
   const autoScrollToWork = (delay) => {
     if (!workSection) return;
+    prepareFooterIntro();
     setScrollLock(true);
     window.setTimeout(async () => {
       try {
         autoScrollInProgress = true;
         const isMobile = window.innerWidth < 768;
         const behavior = prefersReduced || isMobile ? "auto" : "smooth";
+        if (isMobile) {
+          mobileAutoScatterSlowUntil = performance.now() + 1100;
+        }
         const targetY = workSection.getBoundingClientRect().top + getScrollY();
 
         workSection.scrollIntoView({ behavior, block: "start" });
@@ -204,12 +379,50 @@
         } else {
           await new Promise((resolve) => requestAnimationFrame(resolve));
         }
+
+        await flashMobileWorkCards();
+        revealFooterShell();
+        await animateFooterLogo();
       } finally {
         autoScrollInProgress = false;
         setScrollLock(false);
       }
     }, delay);
   };
+
+  if (!prefersReduced && canUseGsap && footerLogoChars.length) {
+    let logoScrollRaf = 0;
+    let lastLogoScrollY = getScrollY();
+    let lastDirection = 0;
+
+    const syncFooterLogoByScroll = () => {
+      logoScrollRaf = 0;
+      if (scrollLockActive || autoScrollInProgress || !footerLogoAnimated) {
+        lastLogoScrollY = getScrollY();
+        return;
+      }
+
+      const y = getScrollY();
+      const delta = y - lastLogoScrollY;
+      lastLogoScrollY = y;
+      if (Math.abs(delta) < 0.8) return;
+
+      const direction = delta > 0 ? 1 : -1;
+      if (direction === lastDirection) return;
+      lastDirection = direction;
+
+      if (direction < 0) {
+        setFooterLogoVisibility(false, { duration: 0.28, stagger: 0.03 });
+      } else {
+        setFooterLogoVisibility(true, { duration: 0.42, stagger: 0.06 });
+      }
+    };
+
+    window.addEventListener("scroll", () => {
+      if (logoScrollRaf) return;
+      logoScrollRaf = requestAnimationFrame(syncFooterLogoByScroll);
+    }, { passive: true });
+  }
 
   const lerp = (a, b, t) => a + (b - a) * t;
   const clamp01 = (t) => Math.min(1, Math.max(0, t));
@@ -364,7 +577,7 @@
             scatterY,
             scatterZ: rand(-1200, 1200),
             alpha: rand(isMobile ? 0.72 : 0.45, 0.98),
-            size: rand(isMobile ? 0.95 : 0.9, isMobile ? 2.05 : 2.2),
+            size: rand(isMobile ? 0.82 : 0.9, isMobile ? 1.78 : 2.2),
             r: base[0],
             g: base[1],
             b: base[2],
@@ -407,8 +620,9 @@
 
       const intro = easeOutExpo(clamp01(state.intro));
       const isMobile = viewportW < 768;
+      const mobileScatterLerp = performance.now() < mobileAutoScatterSlowUntil ? 0.14 : 0.2;
       scatterVisual = isMobile
-        ? lerp(scatterVisual, clamp01(state.scatter), 0.2)
+        ? lerp(scatterVisual, clamp01(state.scatter), mobileScatterLerp)
         : clamp01(state.scatter);
       const scatter = clamp01(scatterVisual);
       const explode = Math.min(1, scatter * 1.55);

@@ -23,6 +23,7 @@
 html,
 body {
   height: 100%;
+  background-color: #000000;
 }
 
 body {
@@ -32,6 +33,7 @@ body {
   color: var(--text);
   overflow-x: hidden;
   scrollbar-gutter: stable;
+  overscroll-behavior-y: none;
 }
 
 @media (pointer: fine) {
@@ -187,7 +189,7 @@ main {
   font-style: italic;
   font-weight: 500;
   letter-spacing: 0.02em;
-  color: #F6D365;
+  color: #3A86FF;
   transform-origin: 0% 70%;
 }
 
@@ -355,13 +357,52 @@ main {
   mix-blend-mode: screen;
 }
 
+.work-item::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    rgba(var(--hover-rgb), .54) 0%,
+    rgba(var(--hover-rgb), .34) 68%,
+    rgba(var(--hover-rgb), .2) 100%
+  );
+  transform-origin: left center;
+  transform: scaleX(0);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+  mix-blend-mode: screen;
+  will-change: transform, opacity;
+}
+
 .work-item:hover {
   transform: none;
+}
+
+.work-item.is-mobile-sweep::after {
+  animation: mobile-card-sweep .68s cubic-bezier(.2, .7, .2, 1) forwards;
 }
 
 .work-item.is-hovered {
   --hover-scale: 4.15;
   --hover-opacity: 1;
+}
+
+@keyframes mobile-card-sweep {
+  0% {
+    transform: scaleX(0);
+    opacity: .9;
+  }
+  70% {
+    transform: scaleX(1);
+    opacity: .92;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
 }
 
 .work-item-weightup {
@@ -439,6 +480,12 @@ main {
   padding: 26px 0 40px;
 }
 
+.footer.is-preintro-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .footer-inner {
   width: min(var(--max), calc(100% - 32px));
   margin: 0 auto;
@@ -463,6 +510,24 @@ main {
   font-size: 20px;
   line-height: 1;
   letter-spacing: 0.02em;
+}
+
+.brand-logo {
+  display: block;
+  width: auto;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.brand-logo-char {
+  transform-box: fill-box;
+  transform-origin: left center;
+  will-change: transform, opacity, filter;
+}
+
+.footer-note,
+.footer-right .mono {
+  will-change: transform, opacity, filter;
 }
 
 .footer-right {
@@ -537,6 +602,10 @@ main {
     font-size: 18px;
   }
 
+  .brand-logo {
+    height: 12px;
+  }
+
   .footer-note {
     display: block;
     font-size: 11px;
@@ -550,6 +619,11 @@ main {
 }
 
 @media (pointer: coarse) {
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+
   .cursor {
     display: none;
   }
