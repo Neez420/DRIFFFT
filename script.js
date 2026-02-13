@@ -196,6 +196,22 @@
       requestAnimationFrame(tick);
     });
 
+  const waitForDistanceToTarget = (targetY, maxDistance, timeoutMs = 1400) =>
+    new Promise((resolve) => {
+      const start = performance.now();
+
+      const tick = () => {
+        const y = getScrollY();
+        if (Math.abs(y - targetY) <= maxDistance || performance.now() - start >= timeoutMs) {
+          resolve();
+          return;
+        }
+        requestAnimationFrame(tick);
+      };
+
+      requestAnimationFrame(tick);
+    });
+
   const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
   let footerLogoAnimated = false;
   let footerLogoVisible = false;
@@ -408,14 +424,24 @@
 
         workSection.scrollIntoView({ behavior, block: "start" });
 
-        if (behavior === "smooth") {
+        let footerIntroPromise;
+        if (behavior === "smooth" && !isMobile) {
+          footerIntroPromise = (async () => {
+            await waitForDistanceToTarget(targetY, window.innerHeight * 0.28);
+            revealFooterShell();
+            return animateFooterLogo();
+          })();
+          await waitForScrollSettle(targetY);
+        } else if (behavior === "smooth") {
           await waitForScrollSettle(targetY);
         } else {
           await new Promise((resolve) => requestAnimationFrame(resolve));
         }
 
-        revealFooterShell();
-        const footerIntroPromise = animateFooterLogo();
+        if (!footerIntroPromise) {
+          revealFooterShell();
+          footerIntroPromise = animateFooterLogo();
+        }
         const mobileSweepPromise = flashMobileWorkCards();
         await Promise.all([footerIntroPromise, mobileSweepPromise]);
       } finally {
