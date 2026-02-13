@@ -653,6 +653,8 @@
     let rafId = 0;
     let lastBuildW = 0;
     let lastBuildH = 0;
+    let lastResizeW = window.innerWidth || 0;
+    let lastResizeH = window.innerHeight || 0;
     let scatterVisual = 0;
     let sectionTitleDotParticle = null;
     let cachedSectionTitleDotTarget = null;
@@ -1099,6 +1101,13 @@
     const onResize = () => {
       cancelAnimationFrame(resizeRaf);
       resizeRaf = requestAnimationFrame(() => {
+        const nextW = window.innerWidth || 0;
+        const nextH = window.innerHeight || 0;
+        const isMobileResizeNoise = nextW < 768
+          && Math.abs(nextW - lastResizeW) < 24;
+        lastResizeW = nextW;
+        lastResizeH = nextH;
+        if (isMobileResizeNoise) return;
         buildParticles(false);
         refreshSectionTitleDotLayout();
       });
@@ -1237,12 +1246,24 @@
   if (particleWord && window.innerWidth < 768) {
     const hero = document.querySelector(".hero");
     let scrollRaf = 0;
+    let resizeRaf = 0;
+    let mobileHeroTravel = 1;
+    let lastMobileWidth = window.innerWidth || 0;
+
+    const computeMobileHeroTravel = () => {
+      if (!hero) return;
+      const heroHeight = Math.max(
+        hero.getBoundingClientRect().height || 0,
+        hero.offsetHeight || 0,
+        window.innerHeight || 0
+      );
+      mobileHeroTravel = Math.max(1, heroHeight * 0.9);
+    };
 
     const syncMobileScatter = () => {
       if (!hero) return;
-      const heroTravel = Math.max(1, hero.offsetHeight * 0.9);
       const y = Math.max(0, window.scrollY || window.pageYOffset || 0);
-      particleWord.state.scatter = clamp01(y / heroTravel);
+      particleWord.state.scatter = clamp01(y / mobileHeroTravel);
     };
 
     const onScroll = () => {
@@ -1250,8 +1271,21 @@
       scrollRaf = requestAnimationFrame(syncMobileScatter);
     };
 
+    const onMobileResize = () => {
+      cancelAnimationFrame(resizeRaf);
+      resizeRaf = requestAnimationFrame(() => {
+        const width = window.innerWidth || 0;
+        // Ignore browser UI bar show/hide height changes, update only on real layout width changes.
+        if (Math.abs(width - lastMobileWidth) < 24) return;
+        lastMobileWidth = width;
+        computeMobileHeroTravel();
+        syncMobileScatter();
+      });
+    };
+
     window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", onMobileResize, { passive: true });
+    computeMobileHeroTravel();
     syncMobileScatter();
   } else if (canUseScrollTrigger && particleWord) {
     gsap.timeline({
