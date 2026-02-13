@@ -468,6 +468,10 @@ main {
   color: rgba(233, 236, 245, .55);
 }
 
+.work-meta.mono {
+  font-size: 12px;
+}
+
 .work-desc {
   margin: 10px 0 0;
   color: rgba(233, 236, 245, .82);
@@ -484,7 +488,7 @@ main {
 
 .mono {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 16px;
   letter-spacing: .06em;
   text-transform: uppercase;
 }
@@ -614,8 +618,16 @@ main {
   }
 
   .section-sub {
-      font-size: 20px;
+      font-size: 24px;
       padding-left: 5px;
+  }
+
+  .mono {
+    font-size: 16px;
+  }
+
+  .work-desc {
+    max-width: 80%;
   }
 
   .footer {
@@ -645,7 +657,8 @@ main {
   }
 
   .brand-logo {
-    height: 12px;
+    height: 14px;
+    padding-bottom: 5px;
   }
 
   .footer-note {
