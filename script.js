@@ -586,19 +586,23 @@
       }
       if (!rect.width && !rect.height) return null;
       const fontSize = parseFloat(window.getComputedStyle(sectionTitleDotAnchor).fontSize) || rect.height;
-      const maxDotDiameter = viewportW < 768 ? 20 : 30;
-      const minDotDiameter = viewportW < 768 ? 8 : 11;
+      const isMobile = viewportW < 768;
+      const maxDotDiameter = isMobile ? 9 : 30;
+      const minDotDiameter = isMobile ? 4 : 11;
       const dotDiameter = Math.max(
         minDotDiameter,
-        Math.min(maxDotDiameter, Math.max(rect.width * 1.1, fontSize * 0.14))
+        Math.min(maxDotDiameter, Math.max(
+          rect.width * (isMobile ? 0.92 : 1.1),
+          fontSize * (isMobile ? 0.102 : 0.14)
+        ))
       );
       const dotRadius = dotDiameter * 0.5;
       const baselineY = sectionTitleBaselineProbe
         ? sectionTitleBaselineProbe.getBoundingClientRect().top
         : null;
       const dotY = Number.isFinite(baselineY)
-        ? baselineY - dotRadius * 0.88
-        : rect.top + rect.height * 0.5 + (viewportW < 768 ? 2 : 3);
+        ? baselineY - dotRadius * (isMobile ? 2.92 : 0.88)
+        : rect.top + rect.height * 0.5 + (isMobile ? 0 : 3);
       return {
         x: rect.left + rect.width * 0.5,
         y: dotY,
@@ -801,7 +805,9 @@
 
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
-        const sectionDotLockRaw = clamp01((scatter - 0.64) / 0.3);
+        const sectionDotStart = isMobile ? 0.36 : 0.64;
+        const sectionDotSpan = isMobile ? 0.2 : 0.3;
+        const sectionDotLockRaw = clamp01((scatter - sectionDotStart) / sectionDotSpan);
         const sectionDotLockMix = sectionDotLockRaw * sectionDotLockRaw * (3 - 2 * sectionDotLockRaw);
         const sectionDotMix = p === sectionTitleDotParticle ? sectionDotLockMix : 0;
         const sectionDotAmbientScale = 1 - sectionDotMix;
@@ -882,7 +888,7 @@
         const explodeSizeBoost = isMobile ? 0.36 : 0.6;
         let radius = p.size * (0.85 + explode * explodeSizeBoost) * Math.max(0.68, Math.min(1.8, depth));
         if (p === sectionTitleDotParticle && p.sectionDotRadius) {
-          const anchoredRadius = p.sectionDotRadius * Math.max(0.72, Math.min(1.34, depth));
+          const anchoredRadius = p.sectionDotRadius * (isMobile ? 1 : Math.max(0.72, Math.min(1.34, depth)));
           radius = lerp(radius, anchoredRadius, sectionDotMix);
         }
 

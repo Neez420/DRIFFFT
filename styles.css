@@ -577,6 +577,19 @@ main {
 }
 
 @media (max-width: 768px) {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-x: clip;
+  }
+
+  main {
+    overflow-x: hidden;
+    overflow-x: clip;
+  }
+
   .hero-inner {
     width: calc(100% - 12px);
   }
@@ -597,7 +610,7 @@ main {
 
   .section-title {
   margin: 0;
-  font-size: 80px;
+  font-size: 70px;
   }
 
   .section-sub {
