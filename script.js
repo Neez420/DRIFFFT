@@ -656,7 +656,6 @@
     let lastBuildH = 0;
     let lastResizeW = window.innerWidth || 0;
     let lastResizeH = window.innerHeight || 0;
-    let lastRenderTs = 0;
     let scatterVisual = 0;
     let sectionTitlePeriodParticle = null;
     let sectionTitleIDotParticle = null;
@@ -669,14 +668,6 @@
       active: false,
       lastMove: 0
     };
-    const tear = {
-      x: 0,
-      y: 0,
-      open: 0,
-      angle: 0,
-      angularVel: 0
-    };
-    const pointerIdleMsForTear = 400;
 
     const onPointerMove = (e) => {
       const now = performance.now();
@@ -1005,6 +996,9 @@
 
           const base = palette[(Math.random() * palette.length) | 0];
           const size = rand(isMobile ? 0.82 : 0.9, isMobile ? 1.78 : 2.2);
+          const layerRoll = Math.random();
+          const precessionLayerSpeed = layerRoll < 0.33 ? 0.74 : layerRoll < 0.66 ? 1 : 1.26;
+          const precessionLayerInfluence = layerRoll < 0.33 ? 0.82 : layerRoll < 0.66 ? 1 : 1.2;
 
           built.push({
             homeX,
@@ -1029,7 +1023,11 @@
             driftPhaseX: rand(0, Math.PI * 2),
             driftPhaseY: rand(0, Math.PI * 2),
             driftPhaseZ: rand(0, Math.PI * 2),
-            tearPhase: rand(0, Math.PI * 2)
+            swirlPhase: rand(0, Math.PI * 2),
+            swirlOffsetX: 0,
+            swirlOffsetY: 0,
+            precessionLayerSpeed,
+            precessionLayerInfluence
           });
         }
       }
@@ -1085,26 +1083,19 @@
       const rippleEnvelope = rippleStartFade * rippleEndFade;
       const nowMs = performance.now();
       const t = nowMs * 0.001;
-      const dt = Math.min(0.05, Math.max(0.001, (nowMs - (lastRenderTs || nowMs)) / 1000));
-      lastRenderTs = nowMs;
-      const pointerIdle = pointer.active && (nowMs - pointer.lastMove) >= pointerIdleMsForTear;
-      const tearTargetOpen = pointerIdle ? 1 : 0;
-      const tearOpenEase = tearTargetOpen > tear.open
-        ? 1 - Math.exp(-dt * 7.4)
-        : 1 - Math.exp(-dt * 12.5);
-      tear.open = lerp(tear.open, tearTargetOpen, tearOpenEase);
-      if (pointer.active) {
-        const centerEase = tearTargetOpen ? 0.2 : 0.14;
-        tear.x = lerp(tear.x || pointer.x, pointer.x, centerEase);
-        tear.y = lerp(tear.y || pointer.y, pointer.y, centerEase);
-      }
-      const tearAngularTarget = tear.open * (isMobile ? 1.35 : 1.75);
-      const tearAngularEase = 1 - Math.exp(-dt * 6.8);
-      tear.angularVel = lerp(tear.angularVel || 0, tearAngularTarget, tearAngularEase);
-      tear.angle += tear.angularVel * dt;
-      const tearMix = tear.open * clamp01((scatter - 0.12) / 0.42) * intro;
-      const tearRadius = Math.max(120, Math.min(340, viewportW * 0.2));
-      const tearFeather = tearRadius * 0.46;
+      const pointerRadius = Math.max(96, Math.min(220, viewportW * 0.15));
+      const pointerSwirlRadiusMax = isMobile ? 0 : 3.4;
+      const pointerSwirlSpeed = 4.4;
+      const pointerSwirlEase = 0.18;
+      const pointerReady = !isMobile && pointer.active && scatter < 0.2;
+      const precessionMix = clamp01((scatter - 0.08) / 0.6) * intro;
+      const precessionAngularSpeed = isMobile ? 0.012 : 0.016;
+      const barycenterX = viewportW * 0.53
+        + Math.sin(t * 0.056) * viewportW * 0.16
+        + Math.cos(t * 0.031) * viewportW * 0.07;
+      const barycenterY = viewportH * 0.47
+        + Math.cos(t * 0.051) * viewportH * 0.14
+        + Math.sin(t * 0.028) * viewportH * 0.06;
 
       const cx = viewportW / 2;
       const cy = viewportH / 2;
@@ -1124,11 +1115,14 @@
 
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
+        const isPeriodDotParticle = !isMobile && p === sectionTitlePeriodParticle && Boolean(sectionPeriodTarget);
+        const isIDotParticle = !isMobile && p === sectionTitleIDotParticle && Boolean(sectionIDotTarget);
+        const isSectionDotParticle = isPeriodDotParticle || isIDotParticle;
         const periodDotStart = 0.64;
         const periodDotSpan = 0.3;
         const periodDotLockRaw = clamp01((scatter - periodDotStart) / periodDotSpan);
         const periodDotLockMix = periodDotLockRaw * periodDotLockRaw * (3 - 2 * periodDotLockRaw);
-        const periodDotMix = !isMobile && p === sectionTitlePeriodParticle
+        const periodDotMix = isPeriodDotParticle
           ? periodDotLockMix
           : 0;
 
@@ -1136,11 +1130,10 @@
         const iDotSpan = 0.28;
         const iDotLockRaw = clamp01((scatter - iDotStart) / iDotSpan);
         const iDotLockMix = iDotLockRaw * iDotLockRaw * (3 - 2 * iDotLockRaw);
-        const iDotMix = !isMobile && p === sectionTitleIDotParticle
+        const iDotMix = isIDotParticle
           ? iDotLockMix
           : 0;
         const sectionDotAmbientScale = 1 - Math.max(periodDotMix, iDotMix);
-        const ambientSuppression = 1 - tearMix * 0.12;
 
         const formedX = lerp(p.startX, p.homeX, intro);
         const formedY = lerp(p.startY, p.homeY, intro);
@@ -1150,21 +1143,15 @@
         const explodedY = lerp(p.homeY, p.scatterY, explode);
         const explodedZ = lerp(0, p.scatterZ, explode);
 
-        const ambientX = Math.sin(t * p.driftFreqX + p.driftPhaseX)
-          * p.driftAmpX
-          * ambient
-          * sectionDotAmbientScale
-          * ambientSuppression;
-        const ambientY = Math.cos(t * p.driftFreqY + p.driftPhaseY)
-          * p.driftAmpY
-          * ambient
-          * sectionDotAmbientScale
-          * ambientSuppression;
-        const ambientZ = Math.sin(t * p.driftFreqZ + p.driftPhaseZ)
-          * p.driftAmpZ
-          * ambient
-          * sectionDotAmbientScale
-          * ambientSuppression;
+        const ambientX = isSectionDotParticle
+          ? 0
+          : Math.sin(t * p.driftFreqX + p.driftPhaseX) * p.driftAmpX * ambient * sectionDotAmbientScale;
+        const ambientY = isSectionDotParticle
+          ? 0
+          : Math.cos(t * p.driftFreqY + p.driftPhaseY) * p.driftAmpY * ambient * sectionDotAmbientScale;
+        const ambientZ = isSectionDotParticle
+          ? 0
+          : Math.sin(t * p.driftFreqZ + p.driftPhaseZ) * p.driftAmpZ * ambient * sectionDotAmbientScale;
 
         const x = lerp(formedX, explodedX, scatter) + ambientX;
         const y = lerp(formedY, explodedY, scatter) + ambientY;
@@ -1175,7 +1162,7 @@
         let drawWorldZ = z;
         let alphaBoost = 0;
 
-        if (rippleProgress > 0 && rippleEnvelope > 0.001) {
+        if (!isSectionDotParticle && rippleProgress > 0 && rippleEnvelope > 0.001) {
           const dxRipple = p.homeX - state.rippleOriginX;
           const dyRipple = p.homeY - state.rippleOriginY;
           const distRipple = Math.hypot(dxRipple, dyRipple);
@@ -1196,27 +1183,28 @@
           }
         }
 
-        if (!isMobile && tearMix > 0.001) {
-          const dxTear = drawWorldX - tear.x;
-          const dyTear = drawWorldY - tear.y;
-          const distTear = Math.hypot(dxTear, dyTear);
-          const tearOuterRadius = tearRadius + tearFeather;
-          if (distTear < tearOuterRadius) {
-            const edge = 1 - clamp01((distTear - tearRadius) / Math.max(1, tearFeather));
-            const smoothEdge = edge * edge * (3 - 2 * edge);
-            const tearBlend = smoothEdge * tearMix * sectionDotAmbientScale;
-            const tearAngle = tear.angle + Math.sin(p.tearPhase + t * 0.35) * 0.035;
-            const cosA = Math.cos(tearAngle);
-            const sinA = Math.sin(tearAngle);
-            const rotX = dxTear * cosA - dyTear * sinA;
-            const rotY = dxTear * sinA + dyTear * cosA;
-            const tearX = tear.x + rotX;
-            const tearY = tear.y + rotY;
-            drawWorldX = lerp(drawWorldX, tearX, tearBlend);
-            drawWorldY = lerp(drawWorldY, tearY, tearBlend);
-            alphaBoost += tearBlend * 0.06;
+        if (!isSectionDotParticle && pointerReady && intro > 0.72) {
+          const dxPointer = p.homeX - pointer.x;
+          const dyPointer = p.homeY - pointer.y;
+          const distPointer = Math.hypot(dxPointer, dyPointer);
+          let swirlTargetX = 0;
+          let swirlTargetY = 0;
+          if (distPointer < pointerRadius) {
+            const n = 1 - distPointer / pointerRadius;
+            const falloff = n * n;
+            const swirlRadius = pointerSwirlRadiusMax * falloff;
+            const swirlAngle = t * pointerSwirlSpeed + p.swirlPhase;
+            swirlTargetX = Math.cos(swirlAngle) * swirlRadius;
+            swirlTargetY = Math.sin(swirlAngle) * swirlRadius;
           }
+          p.swirlOffsetX = lerp(p.swirlOffsetX || 0, swirlTargetX, pointerSwirlEase);
+          p.swirlOffsetY = lerp(p.swirlOffsetY || 0, swirlTargetY, pointerSwirlEase);
+        } else {
+          p.swirlOffsetX = lerp(p.swirlOffsetX || 0, 0, pointerSwirlEase);
+          p.swirlOffsetY = lerp(p.swirlOffsetY || 0, 0, pointerSwirlEase);
         }
+        drawWorldX += p.swirlOffsetX || 0;
+        drawWorldY += p.swirlOffsetY || 0;
 
         if (p === sectionTitlePeriodParticle && sectionPeriodTarget) {
           drawWorldX = lerp(drawWorldX, sectionPeriodTarget.x, periodDotMix);
@@ -1228,6 +1216,18 @@
           drawWorldX = lerp(drawWorldX, sectionIDotTarget.x, iDotMix);
           drawWorldY = lerp(drawWorldY, sectionIDotTarget.y, iDotMix);
           drawWorldZ = lerp(drawWorldZ, 0, iDotMix);
+        }
+        if (!isSectionDotParticle && precessionMix > 0.001) {
+          const precessionAngle = t * precessionAngularSpeed * p.precessionLayerSpeed;
+          const precessionSin = Math.sin(precessionAngle);
+          const precessionCos = Math.cos(precessionAngle);
+          const toParticleX = drawWorldX - barycenterX;
+          const toParticleY = drawWorldY - barycenterY;
+          const orbitX = barycenterX + toParticleX * precessionCos - toParticleY * precessionSin;
+          const orbitY = barycenterY + toParticleX * precessionSin + toParticleY * precessionCos;
+          const localPrecessionMix = Math.min(1, precessionMix * p.precessionLayerInfluence);
+          drawWorldX = lerp(drawWorldX, orbitX, localPrecessionMix);
+          drawWorldY = lerp(drawWorldY, orbitY, localPrecessionMix);
         }
 
         const depth = perspective / Math.max(120, perspective - drawWorldZ);
@@ -1251,6 +1251,7 @@
           const anchoredRadius = p.sectionDotRadius * (isMobile ? 1 : Math.max(0.78, Math.min(1.2, depth)));
           radius = lerp(radius, anchoredRadius, iDotMix);
         }
+
         ctx.fillStyle = `rgba(${p.r}, ${p.g}, ${p.b}, ${alpha})`;
         ctx.beginPath();
         ctx.arc(drawX * dpr, drawY * dpr, radius * dpr, 0, Math.PI * 2);
