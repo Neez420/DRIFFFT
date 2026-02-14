@@ -667,19 +667,19 @@
       x: 0,
       y: 0,
       active: false,
-      lastMove: 0,
-      speed: 0
+      lastMove: 0
     };
+    const tear = {
+      x: 0,
+      y: 0,
+      open: 0,
+      angle: 0,
+      angularVel: 0
+    };
+    const pointerIdleMsForTear = 400;
 
     const onPointerMove = (e) => {
       const now = performance.now();
-      const dt = pointer.lastMove ? Math.max(0.001, (now - pointer.lastMove) / 1000) : 0;
-      if (dt > 0) {
-        const dx = e.clientX - pointer.x;
-        const dy = e.clientY - pointer.y;
-        const instantSpeed = Math.hypot(dx, dy) / dt;
-        pointer.speed = lerp(pointer.speed || 0, instantSpeed, 0.22);
-      }
       pointer.x = e.clientX;
       pointer.y = e.clientY;
       pointer.active = true;
@@ -688,12 +688,10 @@
 
     const onPointerLeave = () => {
       pointer.active = false;
-      pointer.speed = 0;
     };
 
     const onTouchStart = () => {
       pointer.active = false;
-      pointer.speed = 0;
     };
 
     const rand = (min, max) => min + Math.random() * (max - min);
@@ -1031,11 +1029,7 @@
             driftPhaseX: rand(0, Math.PI * 2),
             driftPhaseY: rand(0, Math.PI * 2),
             driftPhaseZ: rand(0, Math.PI * 2),
-            lensVelX: 0,
-            lensVelY: 0,
-            lensOffsetX: 0,
-            lensOffsetY: 0,
-            lensCoupling: rand(0.8, 1.28)
+            tearPhase: rand(0, Math.PI * 2)
           });
         }
       }
@@ -1093,15 +1087,24 @@
       const t = nowMs * 0.001;
       const dt = Math.min(0.05, Math.max(0.001, (nowMs - (lastRenderTs || nowMs)) / 1000));
       lastRenderTs = nowMs;
-      if (!pointer.active) {
-        pointer.speed *= Math.exp(-dt * 8.5);
+      const pointerIdle = pointer.active && (nowMs - pointer.lastMove) >= pointerIdleMsForTear;
+      const tearTargetOpen = pointerIdle ? 1 : 0;
+      const tearOpenEase = tearTargetOpen > tear.open
+        ? 1 - Math.exp(-dt * 7.4)
+        : 1 - Math.exp(-dt * 12.5);
+      tear.open = lerp(tear.open, tearTargetOpen, tearOpenEase);
+      if (pointer.active) {
+        const centerEase = tearTargetOpen ? 0.2 : 0.14;
+        tear.x = lerp(tear.x || pointer.x, pointer.x, centerEase);
+        tear.y = lerp(tear.y || pointer.y, pointer.y, centerEase);
       }
-      const lensingMix = clamp01((scatter - 0.12) / 0.38) * intro;
-      const lensingRadius = Math.max(170, Math.min(460, viewportW * 0.3));
-      const speedBoost = 1 + Math.min(3.1, (pointer.speed || 0) / 900);
-      const curvatureStrength = (isMobile ? 1800 : 2550) * speedBoost;
-      const lensDamping = Math.exp(-dt * 9.2);
-      const lensRelax = Math.exp(-dt * 3.6);
+      const tearAngularTarget = tear.open * (isMobile ? 1.35 : 1.75);
+      const tearAngularEase = 1 - Math.exp(-dt * 6.8);
+      tear.angularVel = lerp(tear.angularVel || 0, tearAngularTarget, tearAngularEase);
+      tear.angle += tear.angularVel * dt;
+      const tearMix = tear.open * clamp01((scatter - 0.12) / 0.42) * intro;
+      const tearRadius = Math.max(120, Math.min(340, viewportW * 0.2));
+      const tearFeather = tearRadius * 0.46;
 
       const cx = viewportW / 2;
       const cy = viewportH / 2;
@@ -1137,7 +1140,7 @@
           ? iDotLockMix
           : 0;
         const sectionDotAmbientScale = 1 - Math.max(periodDotMix, iDotMix);
-        const ambientSuppression = 1 - lensingMix * 0.2;
+        const ambientSuppression = 1 - tearMix * 0.12;
 
         const formedX = lerp(p.startX, p.homeX, intro);
         const formedY = lerp(p.startY, p.homeY, intro);
@@ -1193,33 +1196,27 @@
           }
         }
 
-        if (!isMobile && pointer.active && lensingMix > 0.001) {
-          const toCursorX = pointer.x - drawWorldX;
-          const toCursorY = pointer.y - drawWorldY;
-          const dist = Math.hypot(toCursorX, toCursorY);
-          if (dist < lensingRadius) {
-            const invDist = 1 / Math.max(1, dist);
-            const perpX = -toCursorY * invDist;
-            const perpY = toCursorX * invDist;
-            const force = (curvatureStrength * p.lensCoupling * sectionDotAmbientScale * lensingMix) / (dist + 20);
-            p.lensVelX += perpX * force * dt;
-            p.lensVelY += perpY * force * dt;
+        if (!isMobile && tearMix > 0.001) {
+          const dxTear = drawWorldX - tear.x;
+          const dyTear = drawWorldY - tear.y;
+          const distTear = Math.hypot(dxTear, dyTear);
+          const tearOuterRadius = tearRadius + tearFeather;
+          if (distTear < tearOuterRadius) {
+            const edge = 1 - clamp01((distTear - tearRadius) / Math.max(1, tearFeather));
+            const smoothEdge = edge * edge * (3 - 2 * edge);
+            const tearBlend = smoothEdge * tearMix * sectionDotAmbientScale;
+            const tearAngle = tear.angle + Math.sin(p.tearPhase + t * 0.35) * 0.035;
+            const cosA = Math.cos(tearAngle);
+            const sinA = Math.sin(tearAngle);
+            const rotX = dxTear * cosA - dyTear * sinA;
+            const rotY = dxTear * sinA + dyTear * cosA;
+            const tearX = tear.x + rotX;
+            const tearY = tear.y + rotY;
+            drawWorldX = lerp(drawWorldX, tearX, tearBlend);
+            drawWorldY = lerp(drawWorldY, tearY, tearBlend);
+            alphaBoost += tearBlend * 0.06;
           }
         }
-
-        p.lensVelX *= lensDamping;
-        p.lensVelY *= lensDamping;
-        p.lensOffsetX += p.lensVelX * dt;
-        p.lensOffsetY += p.lensVelY * dt;
-        if (!pointer.active || lensingMix < 0.001) {
-          p.lensOffsetX *= lensRelax;
-          p.lensOffsetY *= lensRelax;
-        }
-        const maxLensOffset = isMobile ? 95 : 190;
-        p.lensOffsetX = Math.max(-maxLensOffset, Math.min(maxLensOffset, p.lensOffsetX));
-        p.lensOffsetY = Math.max(-maxLensOffset, Math.min(maxLensOffset, p.lensOffsetY));
-        drawWorldX += p.lensOffsetX;
-        drawWorldY += p.lensOffsetY;
 
         if (p === sectionTitlePeriodParticle && sectionPeriodTarget) {
           drawWorldX = lerp(drawWorldX, sectionPeriodTarget.x, periodDotMix);
