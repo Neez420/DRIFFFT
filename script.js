@@ -80,7 +80,8 @@
   const enjoyPrefixEl = enjoyEl?.querySelector(".hero-enjoy-prefix") ?? null;
   const enjoyAccentEl = enjoyEl?.querySelector(".hero-enjoy-accent") ?? null;
   const workSection = document.getElementById("work");
-  const sectionTitleDotAnchor = document.querySelector(".section-title-dot-anchor");
+  const sectionTitlePeriodAnchor = document.querySelector(".section-title-dot-anchor");
+  const sectionTitleIDotAnchor = document.querySelector(".section-title-i-dot-anchor");
   const sectionTitleBaselineProbe = document.querySelector(".section-title-baseline-probe");
   const sectionTitleDotProbe = document.querySelector(".section-title-dot-probe");
   const workCards = Array.from(document.querySelectorAll(".work-item"));
@@ -656,8 +657,10 @@
     let lastResizeW = window.innerWidth || 0;
     let lastResizeH = window.innerHeight || 0;
     let scatterVisual = 0;
-    let sectionTitleDotParticle = null;
-    let cachedSectionTitleDotTarget = null;
+    let sectionTitlePeriodParticle = null;
+    let sectionTitleIDotParticle = null;
+    let cachedSectionTitlePeriodTarget = null;
+    let cachedSectionTitleIDotTarget = null;
     let sectionDotLayoutRaf = 0;
     const pointer = {
       x: 0,
@@ -696,7 +699,10 @@
     };
 
     const getSectionTitleDotColor = () => {
-      const colorSource = sectionTitleDotAnchor?.closest(".section-title") || sectionTitleDotAnchor;
+      const colorSource = sectionTitlePeriodAnchor?.closest(".section-title")
+        || sectionTitleIDotAnchor?.closest(".section-title")
+        || sectionTitlePeriodAnchor
+        || sectionTitleIDotAnchor;
       const parsed = parseCssRgb(colorSource ? window.getComputedStyle(colorSource).color : "");
       return parsed || { r: 245, g: 245, b: 245 };
     };
@@ -714,11 +720,15 @@
       return rect;
     };
 
-    const getSectionTitleDotRect = () => {
-      if (sectionTitleDotAnchor) {
-        const anchorTextNode = sectionTitleDotAnchor.firstChild;
+    const isRectValid = (rect) => Boolean(rect && (rect.width || rect.height));
+
+    const getSectionTitlePeriodRect = () => {
+      if (sectionTitlePeriodAnchor) {
+        const anchorTextNode = sectionTitlePeriodAnchor.firstChild;
         const anchorRect = getTextRangeRect(anchorTextNode, 0, 1);
         if (anchorRect) return anchorRect;
+        const fallbackRect = sectionTitlePeriodAnchor.getBoundingClientRect();
+        if (isRectValid(fallbackRect)) return fallbackRect;
       }
 
       if (sectionTitleDotProbe) {
@@ -731,20 +741,37 @@
         }
       }
 
-      if (!sectionTitleDotAnchor) return null;
-      const fallbackRect = sectionTitleDotAnchor.getBoundingClientRect();
-      if (!fallbackRect || (!fallbackRect.width && !fallbackRect.height)) return null;
-      return fallbackRect;
+      return null;
     };
 
-    const getSectionTitleDotTarget = () => {
+    const getSectionTitleIDotRect = () => {
+      if (sectionTitleIDotAnchor) {
+        const anchorRect = sectionTitleIDotAnchor.getBoundingClientRect();
+        if (isRectValid(anchorRect)) return anchorRect;
+      }
+
+      if (sectionTitleDotProbe) {
+        const probeTextNode = sectionTitleDotProbe.firstChild;
+        const probeText = probeTextNode?.nodeType === Node.TEXT_NODE ? probeTextNode.textContent || "" : "";
+        const iIndex = probeText.toLowerCase().indexOf("i");
+        if (iIndex >= 0) {
+          const probeRect = getTextRangeRect(probeTextNode, iIndex, iIndex + 1);
+          if (probeRect) return probeRect;
+        }
+      }
+
+      return null;
+    };
+
+    const getSectionTitlePeriodTarget = () => {
       const layoutWidth = viewportW || window.innerWidth || 0;
       const isMobile = layoutWidth < 768;
       if (isMobile) return null;
 
-      const rect = getSectionTitleDotRect();
-      if (!rect || (!rect.width && !rect.height)) return null;
-      const fontSize = parseFloat(window.getComputedStyle(sectionTitleDotAnchor).fontSize) || rect.height;
+      const rect = getSectionTitlePeriodRect();
+      if (!isRectValid(rect)) return null;
+      const referenceEl = sectionTitlePeriodAnchor || sectionTitleDotProbe;
+      const fontSize = parseFloat(window.getComputedStyle(referenceEl).fontSize) || rect.height;
       const maxDotDiameter = 30;
       const minDotDiameter = 11;
       const measuredDotDiameter = Math.max(rect.width, rect.height);
@@ -760,57 +787,130 @@
         ? sectionTitleBaselineProbe.getBoundingClientRect().top
         : null;
       const measuredDotCenterY = rect.top + rect.height * 0.5;
-      const dotY = Number.isFinite(baselineY)
-        ? baselineY - dotRadius * 0.88
-        : measuredDotCenterY + 3;
       const target = {
         x: rect.left + rect.width * 0.5,
-        y: dotY,
+        y: Number.isFinite(baselineY) ? baselineY - dotRadius * 0.88 : measuredDotCenterY + 3,
         radius: dotRadius
       };
       return target;
     };
 
-    const bindSectionTitleDotParticle = () => {
-      sectionTitleDotParticle = null;
-      if (!sectionTitleDotAnchor || !particles.length) return;
+    const getSectionTitleIDotTarget = () => {
+      const layoutWidth = viewportW || window.innerWidth || 0;
+      const isMobile = layoutWidth < 768;
+      if (isMobile) return null;
+
+      const rect = getSectionTitleIDotRect();
+      if (!isRectValid(rect)) return null;
+      const referenceEl = sectionTitleIDotAnchor || sectionTitlePeriodAnchor || sectionTitleDotProbe;
+      const fontSize = parseFloat(window.getComputedStyle(referenceEl).fontSize) || rect.height;
+      const maxDotDiameter = 26;
+      const minDotDiameter = 10;
+      const measuredDotDiameter = Math.max(rect.width, rect.height);
+      const dotDiameter = Math.max(
+        minDotDiameter,
+        Math.min(maxDotDiameter, Math.max(
+          measuredDotDiameter * 0.95,
+          fontSize * 0.09
+        ))
+      );
+      return {
+        x: rect.left + rect.width * 0.5,
+        y: rect.top + rect.height * 0.5,
+        radius: dotDiameter * 0.5
+      };
+    };
+
+    const applySectionTitleDotParticleStyle = (particle, minDesktopSize) => {
+      if (!particle) return;
+      const sectionDotColor = getSectionTitleDotColor();
+      particle.r = sectionDotColor.r;
+      particle.g = sectionDotColor.g;
+      particle.b = sectionDotColor.b;
+      particle.alpha = Math.max(particle.alpha, 0.95);
+      const maxSize = viewportW < 768 ? 1.2 : minDesktopSize;
+      particle.size = Math.min(maxSize, Math.max(particle.size, 0.9));
+      particle.scatterZ = 0;
+    };
+
+    const bindSectionTitleDotParticles = () => {
+      sectionTitlePeriodParticle = null;
+      sectionTitleIDotParticle = null;
+      if (!particles.length) return;
       const isMobile = (viewportW || window.innerWidth) < 768;
       if (isMobile) return;
 
-      let candidate = particles[0];
-      let bestScore = -Infinity;
+      let periodCandidate = null;
+      let periodBestScore = -Infinity;
+      let iCandidate = null;
+      let iBestScore = -Infinity;
+
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
-        const score = p.homeX * 1.6 + p.homeY;
-        if (score > bestScore) {
-          bestScore = score;
-          candidate = p;
+        const periodScore = p.homeX * 1.6 + p.homeY;
+        if (periodScore > periodBestScore) {
+          periodBestScore = periodScore;
+          periodCandidate = p;
+        }
+
+        const iScore = p.homeX * 1.2 - p.homeY;
+        if (iScore > iBestScore) {
+          iBestScore = iScore;
+          iCandidate = p;
         }
       }
-      if (!candidate) return;
 
-      const sectionDotColor = getSectionTitleDotColor();
-      candidate.r = sectionDotColor.r;
-      candidate.g = sectionDotColor.g;
-      candidate.b = sectionDotColor.b;
-      candidate.alpha = Math.max(candidate.alpha, 0.95);
-      candidate.size = Math.max(candidate.size, viewportW < 768 ? 1.2 : 1.35);
-      candidate.scatterZ = 0;
-      sectionTitleDotParticle = candidate;
+      if (periodCandidate) {
+        applySectionTitleDotParticleStyle(periodCandidate, 1.35);
+        sectionTitlePeriodParticle = periodCandidate;
+        const periodTarget = cachedSectionTitlePeriodTarget || getSectionTitlePeriodTarget();
+        if (periodTarget) {
+          sectionTitlePeriodParticle.scatterX = periodTarget.x;
+          sectionTitlePeriodParticle.scatterY = periodTarget.y;
+          sectionTitlePeriodParticle.sectionDotRadius = periodTarget.radius;
+        }
+      }
 
-      const target = cachedSectionTitleDotTarget || getSectionTitleDotTarget();
-      if (!target) return;
-      sectionTitleDotParticle.scatterX = target.x;
-      sectionTitleDotParticle.scatterY = target.y;
-      sectionTitleDotParticle.sectionDotRadius = target.radius;
+      if (iCandidate === periodCandidate) {
+        iCandidate = null;
+        iBestScore = -Infinity;
+        for (let i = 0; i < particles.length; i++) {
+          const p = particles[i];
+          if (p === periodCandidate) continue;
+          const iScore = p.homeX * 1.2 - p.homeY;
+          if (iScore > iBestScore) {
+            iBestScore = iScore;
+            iCandidate = p;
+          }
+        }
+      }
+
+      if (iCandidate) {
+        applySectionTitleDotParticleStyle(iCandidate, 1.18);
+        sectionTitleIDotParticle = iCandidate;
+        const iTarget = cachedSectionTitleIDotTarget || getSectionTitleIDotTarget();
+        if (iTarget) {
+          sectionTitleIDotParticle.scatterX = iTarget.x;
+          sectionTitleIDotParticle.scatterY = iTarget.y;
+          sectionTitleIDotParticle.sectionDotRadius = iTarget.radius;
+        }
+      }
     };
 
     const refreshSectionTitleDotLayout = () => {
-      cachedSectionTitleDotTarget = getSectionTitleDotTarget();
-      if (sectionTitleDotParticle && cachedSectionTitleDotTarget) {
-        sectionTitleDotParticle.scatterX = cachedSectionTitleDotTarget.x;
-        sectionTitleDotParticle.scatterY = cachedSectionTitleDotTarget.y;
-        sectionTitleDotParticle.sectionDotRadius = cachedSectionTitleDotTarget.radius;
+      cachedSectionTitlePeriodTarget = getSectionTitlePeriodTarget();
+      cachedSectionTitleIDotTarget = getSectionTitleIDotTarget();
+
+      if (sectionTitlePeriodParticle && cachedSectionTitlePeriodTarget) {
+        sectionTitlePeriodParticle.scatterX = cachedSectionTitlePeriodTarget.x;
+        sectionTitlePeriodParticle.scatterY = cachedSectionTitlePeriodTarget.y;
+        sectionTitlePeriodParticle.sectionDotRadius = cachedSectionTitlePeriodTarget.radius;
+      }
+
+      if (sectionTitleIDotParticle && cachedSectionTitleIDotTarget) {
+        sectionTitleIDotParticle.scatterX = cachedSectionTitleIDotTarget.x;
+        sectionTitleIDotParticle.scatterY = cachedSectionTitleIDotTarget.y;
+        sectionTitleIDotParticle.sectionDotRadius = cachedSectionTitleIDotTarget.radius;
       }
     };
 
@@ -933,9 +1033,10 @@
         particles = built;
       }
       if (particles.length) {
-        bindSectionTitleDotParticle();
+        bindSectionTitleDotParticles();
       } else {
-        sectionTitleDotParticle = null;
+        sectionTitlePeriodParticle = null;
+        sectionTitleIDotParticle = null;
       }
       if (!particles.length) {
         scatterVisual = state.scatter;
@@ -983,23 +1084,37 @@
       const cx = viewportW / 2;
       const cy = viewportH / 2;
       const perspective = 760;
-      const sectionDotTarget = cachedSectionTitleDotTarget;
-      if (sectionTitleDotParticle && sectionDotTarget) {
-        sectionTitleDotParticle.scatterX = sectionDotTarget.x;
-        sectionTitleDotParticle.scatterY = sectionDotTarget.y;
-        sectionTitleDotParticle.sectionDotRadius = sectionDotTarget.radius;
+      const sectionPeriodTarget = cachedSectionTitlePeriodTarget;
+      const sectionIDotTarget = cachedSectionTitleIDotTarget;
+      if (sectionTitlePeriodParticle && sectionPeriodTarget) {
+        sectionTitlePeriodParticle.scatterX = sectionPeriodTarget.x;
+        sectionTitlePeriodParticle.scatterY = sectionPeriodTarget.y;
+        sectionTitlePeriodParticle.sectionDotRadius = sectionPeriodTarget.radius;
+      }
+      if (sectionTitleIDotParticle && sectionIDotTarget) {
+        sectionTitleIDotParticle.scatterX = sectionIDotTarget.x;
+        sectionTitleIDotParticle.scatterY = sectionIDotTarget.y;
+        sectionTitleIDotParticle.sectionDotRadius = sectionIDotTarget.radius;
       }
 
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
-        const sectionDotStart = 0.64;
-        const sectionDotSpan = 0.3;
-        const sectionDotLockRaw = clamp01((scatter - sectionDotStart) / sectionDotSpan);
-        const sectionDotLockMix = sectionDotLockRaw * sectionDotLockRaw * (3 - 2 * sectionDotLockRaw);
-        const sectionDotMix = !isMobile && p === sectionTitleDotParticle
-          ? sectionDotLockMix
+        const periodDotStart = 0.64;
+        const periodDotSpan = 0.3;
+        const periodDotLockRaw = clamp01((scatter - periodDotStart) / periodDotSpan);
+        const periodDotLockMix = periodDotLockRaw * periodDotLockRaw * (3 - 2 * periodDotLockRaw);
+        const periodDotMix = !isMobile && p === sectionTitlePeriodParticle
+          ? periodDotLockMix
           : 0;
-        const sectionDotAmbientScale = 1 - sectionDotMix;
+
+        const iDotStart = 0.46;
+        const iDotSpan = 0.28;
+        const iDotLockRaw = clamp01((scatter - iDotStart) / iDotSpan);
+        const iDotLockMix = iDotLockRaw * iDotLockRaw * (3 - 2 * iDotLockRaw);
+        const iDotMix = !isMobile && p === sectionTitleIDotParticle
+          ? iDotLockMix
+          : 0;
+        const sectionDotAmbientScale = 1 - Math.max(periodDotMix, iDotMix);
 
         const formedX = lerp(p.startX, p.homeX, intro);
         const formedY = lerp(p.startY, p.homeY, intro);
@@ -1066,10 +1181,16 @@
         drawWorldX += p.swirlOffsetX;
         drawWorldY += p.swirlOffsetY;
 
-        if (p === sectionTitleDotParticle && sectionDotTarget) {
-          drawWorldX = lerp(drawWorldX, sectionDotTarget.x, sectionDotMix);
-          drawWorldY = lerp(drawWorldY, sectionDotTarget.y, sectionDotMix);
-          drawWorldZ = lerp(drawWorldZ, 0, sectionDotMix);
+        if (p === sectionTitlePeriodParticle && sectionPeriodTarget) {
+          drawWorldX = lerp(drawWorldX, sectionPeriodTarget.x, periodDotMix);
+          drawWorldY = lerp(drawWorldY, sectionPeriodTarget.y, periodDotMix);
+          drawWorldZ = lerp(drawWorldZ, 0, periodDotMix);
+        }
+
+        if (p === sectionTitleIDotParticle && sectionIDotTarget) {
+          drawWorldX = lerp(drawWorldX, sectionIDotTarget.x, iDotMix);
+          drawWorldY = lerp(drawWorldY, sectionIDotTarget.y, iDotMix);
+          drawWorldZ = lerp(drawWorldZ, 0, iDotMix);
         }
 
         const depth = perspective / Math.max(120, perspective - drawWorldZ);
@@ -1077,16 +1198,21 @@
         const drawY = cy + (drawWorldY - cy) * depth;
 
         let alpha = p.alpha * intro * fade + alphaBoost;
-        if (p === sectionTitleDotParticle) {
-          alpha = lerp(alpha, intro, sectionDotMix);
+        if (p === sectionTitlePeriodParticle) {
+          alpha = lerp(alpha, intro, periodDotMix);
+        } else if (p === sectionTitleIDotParticle) {
+          alpha = lerp(alpha, intro, iDotMix);
         }
         if (alpha < 0.02) continue;
 
         const explodeSizeBoost = isMobile ? 0.36 : 0.6;
         let radius = p.size * (0.85 + explode * explodeSizeBoost) * Math.max(0.68, Math.min(1.8, depth));
-        if (p === sectionTitleDotParticle && p.sectionDotRadius) {
+        if (p === sectionTitlePeriodParticle && p.sectionDotRadius) {
           const anchoredRadius = p.sectionDotRadius * (isMobile ? 1 : Math.max(0.72, Math.min(1.34, depth)));
-          radius = lerp(radius, anchoredRadius, sectionDotMix);
+          radius = lerp(radius, anchoredRadius, periodDotMix);
+        } else if (p === sectionTitleIDotParticle && p.sectionDotRadius) {
+          const anchoredRadius = p.sectionDotRadius * (isMobile ? 1 : Math.max(0.78, Math.min(1.2, depth)));
+          radius = lerp(radius, anchoredRadius, iDotMix);
         }
         ctx.fillStyle = `rgba(${p.r}, ${p.g}, ${p.b}, ${alpha})`;
         ctx.beginPath();
