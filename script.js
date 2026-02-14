@@ -656,10 +656,7 @@
     let lastBuildH = 0;
     let lastResizeW = window.innerWidth || 0;
     let lastResizeH = window.innerHeight || 0;
-    let lastRenderTs = 0;
     let scatterVisual = 0;
-    let rotationCenterX = 0;
-    let rotationCenterY = 0;
     let sectionTitlePeriodParticle = null;
     let sectionTitleIDotParticle = null;
     let cachedSectionTitlePeriodTarget = null;
@@ -978,10 +975,6 @@
       const built = [];
       const centerX = viewportW / 2;
       const centerY = viewportH / 2;
-      rotationCenterX = viewportW * 1.42;
-      rotationCenterY = -viewportH * 0.86;
-      const rotationDirection = Math.random() > 0.5 ? 1 : -1;
-      const baseAngularVelocity = rand(0.0011, 0.0019) * rotationDirection;
 
       for (let y = 0; y < height; y += step) {
         for (let x = 0; x < width; x += step) {
@@ -1002,8 +995,6 @@
 
           const base = palette[(Math.random() * palette.length) | 0];
           const size = rand(isMobile ? 0.82 : 0.9, isMobile ? 1.78 : 2.2);
-          const sizeLerp = clamp01((size - 0.82) / (isMobile ? 0.96 : 1.38));
-          const rotParallax = lerp(1.55, 0.62, sizeLerp);
 
           built.push({
             homeX,
@@ -1028,10 +1019,8 @@
             driftPhaseX: rand(0, Math.PI * 2),
             driftPhaseY: rand(0, Math.PI * 2),
             driftPhaseZ: rand(0, Math.PI * 2),
-            rotOmega: baseAngularVelocity * rand(0.9, 1.1),
-            rotParallax,
-            rotOffsetX: 0,
-            rotOffsetY: 0,
+            breathOrigX: scatterX,
+            breathOrigY: scatterY,
             swirlPhase: rand(0, Math.PI * 2),
             swirlOffsetX: 0,
             swirlOffsetY: 0
@@ -1090,17 +1079,16 @@
       const rippleEnvelope = rippleStartFade * rippleEndFade;
       const nowMs = performance.now();
       const t = nowMs * 0.001;
-      const dt = Math.min(0.05, Math.max(0.001, (nowMs - (lastRenderTs || nowMs)) / 1000));
-      lastRenderTs = nowMs;
       const pointerRadius = Math.max(96, Math.min(220, viewportW * 0.15));
       const pointerSwirlRadiusMax = isMobile ? 0 : 3.4;
       const pointerSwirlSpeed = 4.4;
       const pointerSwirlEase = 0.18;
       const pointerReady = !isMobile && pointer.active && scatter < 0.2;
-      const rotationStart = 0.42;
-      const rotationMix = clamp01(
-        clamp01((scatter - rotationStart) / (1 - rotationStart)) * 1.35
+      const breathingStart = 0.36;
+      const breathingMix = clamp01(
+        clamp01((scatter - breathingStart) / (1 - breathingStart)) * 1.25
       ) * intro;
+      const breathingScale = 1 + Math.sin(nowMs * 0.00042) * 0.045;
 
       const cx = viewportW / 2;
       const cy = viewportH / 2;
@@ -1136,7 +1124,7 @@
           ? iDotLockMix
           : 0;
         const sectionDotAmbientScale = 1 - Math.max(periodDotMix, iDotMix);
-        const ambientSuppression = 1 - rotationMix * 0.94;
+        const ambientSuppression = 1 - breathingMix * 0.78;
 
         const formedX = lerp(p.startX, p.homeX, intro);
         const formedY = lerp(p.startY, p.homeY, intro);
@@ -1215,24 +1203,14 @@
         drawWorldX += p.swirlOffsetX;
         drawWorldY += p.swirlOffsetY;
 
-        if (rotationMix > 0.001) {
-          const dxRot = drawWorldX - rotationCenterX;
-          const dyRot = drawWorldY - rotationCenterY;
-          const rotVX = -dyRot * p.rotOmega * p.rotParallax * 1.9;
-          const rotVY = dxRot * p.rotOmega * p.rotParallax * 1.9;
-          p.rotOffsetX += rotVX * dt;
-          p.rotOffsetY += rotVY * dt;
-          const maxRotOffset = isMobile ? 120 : 260;
-          p.rotOffsetX = Math.max(-maxRotOffset, Math.min(maxRotOffset, p.rotOffsetX));
-          p.rotOffsetY = Math.max(-maxRotOffset, Math.min(maxRotOffset, p.rotOffsetY));
-        } else {
-          p.rotOffsetX = lerp(p.rotOffsetX, 0, 0.02);
-          p.rotOffsetY = lerp(p.rotOffsetY, 0, 0.02);
+        if (breathingMix > 0.001) {
+          const breathingX = cx + (p.breathOrigX - cx) * breathingScale;
+          const breathingY = cy + (p.breathOrigY - cy) * breathingScale;
+          const breathOffsetX = (breathingX - p.breathOrigX) * breathingMix * sectionDotAmbientScale * 1.35;
+          const breathOffsetY = (breathingY - p.breathOrigY) * breathingMix * sectionDotAmbientScale * 1.35;
+          drawWorldX += breathOffsetX;
+          drawWorldY += breathOffsetY;
         }
-
-        const rotationOffsetMix = rotationMix * sectionDotAmbientScale * 2.8;
-        drawWorldX += p.rotOffsetX * rotationOffsetMix;
-        drawWorldY += p.rotOffsetY * rotationOffsetMix;
 
         if (p === sectionTitlePeriodParticle && sectionPeriodTarget) {
           drawWorldX = lerp(drawWorldX, sectionPeriodTarget.x, periodDotMix);
