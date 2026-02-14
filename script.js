@@ -656,6 +656,7 @@
     let lastBuildH = 0;
     let lastResizeW = window.innerWidth || 0;
     let lastResizeH = window.innerHeight || 0;
+    let lastRenderTs = 0;
     let scatterVisual = 0;
     let sectionTitlePeriodParticle = null;
     let sectionTitleIDotParticle = null;
@@ -666,31 +667,36 @@
       x: 0,
       y: 0,
       active: false,
-      lastMove: 0
+      lastMove: 0,
+      speed: 0
     };
 
     const onPointerMove = (e) => {
+      const now = performance.now();
+      const dt = pointer.lastMove ? Math.max(0.001, (now - pointer.lastMove) / 1000) : 0;
+      if (dt > 0) {
+        const dx = e.clientX - pointer.x;
+        const dy = e.clientY - pointer.y;
+        const instantSpeed = Math.hypot(dx, dy) / dt;
+        pointer.speed = lerp(pointer.speed || 0, instantSpeed, 0.22);
+      }
       pointer.x = e.clientX;
       pointer.y = e.clientY;
       pointer.active = true;
-      pointer.lastMove = performance.now();
+      pointer.lastMove = now;
     };
 
     const onPointerLeave = () => {
       pointer.active = false;
+      pointer.speed = 0;
     };
 
     const onTouchStart = () => {
       pointer.active = false;
+      pointer.speed = 0;
     };
 
     const rand = (min, max) => min + Math.random() * (max - min);
-    const pickDepthLayer = () => {
-      const r = Math.random();
-      if (r < 0.44) return 0; // far
-      if (r < 0.82) return 1; // mid
-      return 2; // near
-    };
     const parseCssRgb = (cssColor) => {
       if (!cssColor) return null;
       const m = cssColor.match(/rgba?\(([^)]+)\)/i);
@@ -981,17 +987,6 @@
       const built = [];
       const centerX = viewportW / 2;
       const centerY = viewportH / 2;
-      const depthLayers = isMobile
-        ? [
-          { sizeScale: 0.74, speed: 0.46, moveScale: 0.42, alphaScale: 0.66, alphaPulseAmp: 0.014, microAmp: 2.6 },
-          { sizeScale: 1, speed: 1.02, moveScale: 1.2, alphaScale: 0.9, alphaPulseAmp: 0.02, microAmp: 3.4 },
-          { sizeScale: 1.28, speed: 1.46, moveScale: 1.9, alphaScale: 1.14, alphaPulseAmp: 0.028, microAmp: 5.1 }
-        ]
-        : [
-          { sizeScale: 0.7, speed: 0.44, moveScale: 0.4, alphaScale: 0.62, alphaPulseAmp: 0.014, microAmp: 3.6 },
-          { sizeScale: 1, speed: 1, moveScale: 1.22, alphaScale: 0.9, alphaPulseAmp: 0.02, microAmp: 4.6 },
-          { sizeScale: 1.32, speed: 1.52, moveScale: 2.02, alphaScale: 1.17, alphaPulseAmp: 0.03, microAmp: 6.8 }
-        ];
 
       for (let y = 0; y < height; y += step) {
         for (let x = 0; x < width; x += step) {
@@ -1012,7 +1007,6 @@
 
           const base = palette[(Math.random() * palette.length) | 0];
           const size = rand(isMobile ? 0.82 : 0.9, isMobile ? 1.78 : 2.2);
-          const layer = depthLayers[pickDepthLayer()];
 
           built.push({
             homeX,
@@ -1024,7 +1018,7 @@
             scatterY,
             scatterZ: rand(-1200, 1200),
             alpha: rand(isMobile ? 0.72 : 0.45, 0.98),
-            size: size * layer.sizeScale,
+            size,
             r: base[0],
             g: base[1],
             b: base[2],
@@ -1037,18 +1031,11 @@
             driftPhaseX: rand(0, Math.PI * 2),
             driftPhaseY: rand(0, Math.PI * 2),
             driftPhaseZ: rand(0, Math.PI * 2),
-            layerSpeed: layer.speed,
-            layerMoveScale: layer.moveScale,
-            layerPhaseX: rand(0, Math.PI * 2),
-            layerPhaseY: rand(0, Math.PI * 2),
-            layerPhaseA: rand(0, Math.PI * 2),
-            layerMicroAmpX: rand(layer.microAmp * 0.5, layer.microAmp),
-            layerMicroAmpY: rand(layer.microAmp * 0.5, layer.microAmp),
-            layerAlphaScale: layer.alphaScale,
-            layerAlphaPulseAmp: layer.alphaPulseAmp,
-            swirlPhase: rand(0, Math.PI * 2),
-            swirlOffsetX: 0,
-            swirlOffsetY: 0
+            lensVelX: 0,
+            lensVelY: 0,
+            lensOffsetX: 0,
+            lensOffsetY: 0,
+            lensCoupling: rand(0.8, 1.28)
           });
         }
       }
@@ -1104,16 +1091,17 @@
       const rippleEnvelope = rippleStartFade * rippleEndFade;
       const nowMs = performance.now();
       const t = nowMs * 0.001;
-      const pointerRadius = Math.max(96, Math.min(220, viewportW * 0.15));
-      const pointerSwirlRadiusMax = isMobile ? 0 : 3.4;
-      const pointerSwirlSpeed = 4.4;
-      const pointerSwirlEase = 0.18;
-      const pointerReady = !isMobile && pointer.active && scatter < 0.2;
-      const depthMotionMix = Math.min(1.15, Math.pow(scatter, 0.98) * 1.32) * intro;
-      const layerCurrentX = Math.sin(t * 0.14) * (isMobile ? 11 : 18)
-        + Math.cos(t * 0.06) * (isMobile ? 6 : 10);
-      const layerCurrentY = Math.cos(t * 0.12) * (isMobile ? 9 : 15)
-        + Math.sin(t * 0.05) * (isMobile ? 5 : 9);
+      const dt = Math.min(0.05, Math.max(0.001, (nowMs - (lastRenderTs || nowMs)) / 1000));
+      lastRenderTs = nowMs;
+      if (!pointer.active) {
+        pointer.speed *= Math.exp(-dt * 8.5);
+      }
+      const lensingMix = clamp01((scatter - 0.12) / 0.38) * intro;
+      const lensingRadius = Math.max(170, Math.min(460, viewportW * 0.3));
+      const speedBoost = 1 + Math.min(3.1, (pointer.speed || 0) / 900);
+      const curvatureStrength = (isMobile ? 1800 : 2550) * speedBoost;
+      const lensDamping = Math.exp(-dt * 9.2);
+      const lensRelax = Math.exp(-dt * 3.6);
 
       const cx = viewportW / 2;
       const cy = viewportH / 2;
@@ -1149,7 +1137,7 @@
           ? iDotLockMix
           : 0;
         const sectionDotAmbientScale = 1 - Math.max(periodDotMix, iDotMix);
-        const ambientSuppression = 1 - depthMotionMix * 0.52;
+        const ambientSuppression = 1 - lensingMix * 0.2;
 
         const formedX = lerp(p.startX, p.homeX, intro);
         const formedY = lerp(p.startY, p.homeY, intro);
@@ -1205,35 +1193,33 @@
           }
         }
 
-        if (pointerReady && intro > 0.72) {
-          const dxPointer = p.homeX - pointer.x;
-          const dyPointer = p.homeY - pointer.y;
-          const distPointer = Math.hypot(dxPointer, dyPointer);
-          let swirlTargetX = 0;
-          let swirlTargetY = 0;
-          if (distPointer < pointerRadius) {
-            const n = 1 - distPointer / pointerRadius;
-            const falloff = n * n;
-            const swirlRadius = pointerSwirlRadiusMax * falloff;
-            const swirlAngle = t * pointerSwirlSpeed + p.swirlPhase;
-            swirlTargetX = Math.cos(swirlAngle) * swirlRadius;
-            swirlTargetY = Math.sin(swirlAngle) * swirlRadius;
+        if (!isMobile && pointer.active && lensingMix > 0.001) {
+          const toCursorX = pointer.x - drawWorldX;
+          const toCursorY = pointer.y - drawWorldY;
+          const dist = Math.hypot(toCursorX, toCursorY);
+          if (dist < lensingRadius) {
+            const invDist = 1 / Math.max(1, dist);
+            const perpX = -toCursorY * invDist;
+            const perpY = toCursorX * invDist;
+            const force = (curvatureStrength * p.lensCoupling * sectionDotAmbientScale * lensingMix) / (dist + 20);
+            p.lensVelX += perpX * force * dt;
+            p.lensVelY += perpY * force * dt;
           }
-          p.swirlOffsetX = lerp(p.swirlOffsetX || 0, swirlTargetX, pointerSwirlEase);
-          p.swirlOffsetY = lerp(p.swirlOffsetY || 0, swirlTargetY, pointerSwirlEase);
-        } else {
-          p.swirlOffsetX = lerp(p.swirlOffsetX || 0, 0, pointerSwirlEase);
-          p.swirlOffsetY = lerp(p.swirlOffsetY || 0, 0, pointerSwirlEase);
         }
-        drawWorldX += p.swirlOffsetX;
-        drawWorldY += p.swirlOffsetY;
 
-        const layerWaveX = Math.sin(t * (0.35 * p.layerSpeed) + p.layerPhaseX) * p.layerMicroAmpX;
-        const layerWaveY = Math.cos(t * (0.31 * p.layerSpeed) + p.layerPhaseY) * p.layerMicroAmpY;
-        const depthOffsetX = (layerCurrentX + layerWaveX) * p.layerMoveScale * depthMotionMix * sectionDotAmbientScale * 1.18;
-        const depthOffsetY = (layerCurrentY + layerWaveY) * p.layerMoveScale * depthMotionMix * sectionDotAmbientScale * 1.18;
-        drawWorldX += depthOffsetX;
-        drawWorldY += depthOffsetY;
+        p.lensVelX *= lensDamping;
+        p.lensVelY *= lensDamping;
+        p.lensOffsetX += p.lensVelX * dt;
+        p.lensOffsetY += p.lensVelY * dt;
+        if (!pointer.active || lensingMix < 0.001) {
+          p.lensOffsetX *= lensRelax;
+          p.lensOffsetY *= lensRelax;
+        }
+        const maxLensOffset = isMobile ? 95 : 190;
+        p.lensOffsetX = Math.max(-maxLensOffset, Math.min(maxLensOffset, p.lensOffsetX));
+        p.lensOffsetY = Math.max(-maxLensOffset, Math.min(maxLensOffset, p.lensOffsetY));
+        drawWorldX += p.lensOffsetX;
+        drawWorldY += p.lensOffsetY;
 
         if (p === sectionTitlePeriodParticle && sectionPeriodTarget) {
           drawWorldX = lerp(drawWorldX, sectionPeriodTarget.x, periodDotMix);
@@ -1251,8 +1237,7 @@
         const drawX = cx + (drawWorldX - cx) * depth;
         const drawY = cy + (drawWorldY - cy) * depth;
 
-        const layerAlphaPulse = 1 + Math.sin(t * (0.58 * p.layerSpeed) + p.layerPhaseA) * p.layerAlphaPulseAmp;
-        let alpha = p.alpha * p.layerAlphaScale * layerAlphaPulse * intro * fade + alphaBoost;
+        let alpha = p.alpha * intro * fade + alphaBoost;
         if (p === sectionTitlePeriodParticle) {
           alpha = lerp(alpha, intro, periodDotMix);
         } else if (p === sectionTitleIDotParticle) {
