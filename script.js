@@ -658,6 +658,8 @@
     let lastResizeH = window.innerHeight || 0;
     let lastRenderTs = 0;
     let scatterVisual = 0;
+    let rotationCenterX = 0;
+    let rotationCenterY = 0;
     let sectionTitlePeriodParticle = null;
     let sectionTitleIDotParticle = null;
     let cachedSectionTitlePeriodTarget = null;
@@ -686,35 +688,6 @@
     };
 
     const rand = (min, max) => min + Math.random() * (max - min);
-    const fract = (n) => n - Math.floor(n);
-    const fadeNoise = (t) => t * t * (3 - 2 * t);
-    const hash3 = (x, y, z) => fract(Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453);
-    const valueNoise3 = (x, y, z) => {
-      const ix = Math.floor(x);
-      const iy = Math.floor(y);
-      const iz = Math.floor(z);
-      const fx = fadeNoise(x - ix);
-      const fy = fadeNoise(y - iy);
-      const fz = fadeNoise(z - iz);
-      const lerp1 = (a, b, t) => a + (b - a) * t;
-
-      const c000 = hash3(ix, iy, iz);
-      const c100 = hash3(ix + 1, iy, iz);
-      const c010 = hash3(ix, iy + 1, iz);
-      const c110 = hash3(ix + 1, iy + 1, iz);
-      const c001 = hash3(ix, iy, iz + 1);
-      const c101 = hash3(ix + 1, iy, iz + 1);
-      const c011 = hash3(ix, iy + 1, iz + 1);
-      const c111 = hash3(ix + 1, iy + 1, iz + 1);
-
-      const x00 = lerp1(c000, c100, fx);
-      const x10 = lerp1(c010, c110, fx);
-      const x01 = lerp1(c001, c101, fx);
-      const x11 = lerp1(c011, c111, fx);
-      const y0 = lerp1(x00, x10, fy);
-      const y1 = lerp1(x01, x11, fy);
-      return lerp1(y0, y1, fz) * 2 - 1;
-    };
     const parseCssRgb = (cssColor) => {
       if (!cssColor) return null;
       const m = cssColor.match(/rgba?\(([^)]+)\)/i);
@@ -1005,10 +978,10 @@
       const built = [];
       const centerX = viewportW / 2;
       const centerY = viewportH / 2;
-      const fieldAngle = rand(-Math.PI * 0.08, Math.PI * 0.16);
-      const fieldSpeed = rand(4.2, 7.5);
-      const fieldBaseVX = Math.cos(fieldAngle) * fieldSpeed;
-      const fieldBaseVY = Math.sin(fieldAngle) * fieldSpeed;
+      rotationCenterX = viewportW * 1.42;
+      rotationCenterY = -viewportH * 0.86;
+      const rotationDirection = Math.random() > 0.5 ? 1 : -1;
+      const baseAngularVelocity = rand(0.0011, 0.0019) * rotationDirection;
 
       for (let y = 0; y < height; y += step) {
         for (let x = 0; x < width; x += step) {
@@ -1030,7 +1003,7 @@
           const base = palette[(Math.random() * palette.length) | 0];
           const size = rand(isMobile ? 0.82 : 0.9, isMobile ? 1.78 : 2.2);
           const sizeLerp = clamp01((size - 0.82) / (isMobile ? 0.96 : 1.38));
-          const driftParallax = lerp(1.45, 0.5, sizeLerp);
+          const rotParallax = lerp(1.55, 0.62, sizeLerp);
 
           built.push({
             homeX,
@@ -1055,14 +1028,11 @@
             driftPhaseX: rand(0, Math.PI * 2),
             driftPhaseY: rand(0, Math.PI * 2),
             driftPhaseZ: rand(0, Math.PI * 2),
+            rotOmega: baseAngularVelocity * rand(0.9, 1.1),
+            rotParallax,
+            rotOffsetX: 0,
+            rotOffsetY: 0,
             swirlPhase: rand(0, Math.PI * 2),
-            flowBaseVX: fieldBaseVX * rand(0.86, 1.14),
-            flowBaseVY: fieldBaseVY * rand(0.86, 1.14),
-            flowNoiseSeedX: rand(-1000, 1000),
-            flowNoiseSeedY: rand(-1000, 1000),
-            flowOffsetX: 0,
-            flowOffsetY: 0,
-            driftParallax,
             swirlOffsetX: 0,
             swirlOffsetY: 0
           });
@@ -1127,12 +1097,10 @@
       const pointerSwirlSpeed = 4.4;
       const pointerSwirlEase = 0.18;
       const pointerReady = !isMobile && pointer.active && scatter < 0.2;
-      const driftFlowStart = 0.62;
-      const driftFlowMix = clamp01(
-        Math.pow(clamp01((scatter - driftFlowStart) / (1 - driftFlowStart)), 0.8) * 1.2
+      const rotationStart = 0.42;
+      const rotationMix = clamp01(
+        clamp01((scatter - rotationStart) / (1 - rotationStart)) * 1.35
       ) * intro;
-      const flowSpatialScale = 0.0014;
-      const flowTimeScale = 0.00035;
 
       const cx = viewportW / 2;
       const cy = viewportH / 2;
@@ -1168,7 +1136,7 @@
           ? iDotLockMix
           : 0;
         const sectionDotAmbientScale = 1 - Math.max(periodDotMix, iDotMix);
-        const driftJitterSuppression = 1 - driftFlowMix * 0.98;
+        const ambientSuppression = 1 - rotationMix * 0.94;
 
         const formedX = lerp(p.startX, p.homeX, intro);
         const formedY = lerp(p.startY, p.homeY, intro);
@@ -1182,17 +1150,17 @@
           * p.driftAmpX
           * ambient
           * sectionDotAmbientScale
-          * driftJitterSuppression;
+          * ambientSuppression;
         const ambientY = Math.cos(t * p.driftFreqY + p.driftPhaseY)
           * p.driftAmpY
           * ambient
           * sectionDotAmbientScale
-          * driftJitterSuppression;
+          * ambientSuppression;
         const ambientZ = Math.sin(t * p.driftFreqZ + p.driftPhaseZ)
           * p.driftAmpZ
           * ambient
           * sectionDotAmbientScale
-          * driftJitterSuppression;
+          * ambientSuppression;
 
         const x = lerp(formedX, explodedX, scatter) + ambientX;
         const y = lerp(formedY, explodedY, scatter) + ambientY;
@@ -1247,29 +1215,24 @@
         drawWorldX += p.swirlOffsetX;
         drawWorldY += p.swirlOffsetY;
 
-        if (driftFlowMix > 0.001) {
-          const noiseX = valueNoise3(
-            p.homeX * flowSpatialScale + p.flowNoiseSeedX,
-            p.homeY * flowSpatialScale,
-            nowMs * flowTimeScale
-          );
-          const noiseY = valueNoise3(
-            p.homeX * flowSpatialScale,
-            p.homeY * flowSpatialScale + p.flowNoiseSeedY,
-            nowMs * flowTimeScale
-          );
-          const flowVX = p.flowBaseVX + noiseX * 2.2;
-          const flowVY = p.flowBaseVY + noiseY * 2.2;
-          p.flowOffsetX += flowVX * dt * p.driftParallax * 1.35;
-          p.flowOffsetY += flowVY * dt * p.driftParallax * 1.35;
+        if (rotationMix > 0.001) {
+          const dxRot = drawWorldX - rotationCenterX;
+          const dyRot = drawWorldY - rotationCenterY;
+          const rotVX = -dyRot * p.rotOmega * p.rotParallax * 1.9;
+          const rotVY = dxRot * p.rotOmega * p.rotParallax * 1.9;
+          p.rotOffsetX += rotVX * dt;
+          p.rotOffsetY += rotVY * dt;
+          const maxRotOffset = isMobile ? 120 : 260;
+          p.rotOffsetX = Math.max(-maxRotOffset, Math.min(maxRotOffset, p.rotOffsetX));
+          p.rotOffsetY = Math.max(-maxRotOffset, Math.min(maxRotOffset, p.rotOffsetY));
         } else {
-          p.flowOffsetX = lerp(p.flowOffsetX, 0, 0.008);
-          p.flowOffsetY = lerp(p.flowOffsetY, 0, 0.008);
+          p.rotOffsetX = lerp(p.rotOffsetX, 0, 0.02);
+          p.rotOffsetY = lerp(p.rotOffsetY, 0, 0.02);
         }
 
-        const flowOffsetMix = driftFlowMix * sectionDotAmbientScale * 1.65;
-        drawWorldX += p.flowOffsetX * flowOffsetMix;
-        drawWorldY += p.flowOffsetY * flowOffsetMix;
+        const rotationOffsetMix = rotationMix * sectionDotAmbientScale * 2.8;
+        drawWorldX += p.rotOffsetX * rotationOffsetMix;
+        drawWorldY += p.rotOffsetY * rotationOffsetMix;
 
         if (p === sectionTitlePeriodParticle && sectionPeriodTarget) {
           drawWorldX = lerp(drawWorldX, sectionPeriodTarget.x, periodDotMix);
