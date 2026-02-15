@@ -114,7 +114,9 @@ strong {
   font-size: 12px;
   line-height: 1;
   color: rgba(233, 236, 245, .95);
-  transition: opacity .12s ease;
+  transform: scale(.7);
+  transition: opacity .1s ease, transform .24s cubic-bezier(.2, .7, .2, 1);
+  transition-delay: 0s;
 }
 
 .cursor.is-link {
@@ -127,6 +129,8 @@ strong {
 .cursor.is-link::after {
   content: "↗";
   opacity: 1;
+  transform: scale(1.42);
+  transition-delay: .11s;
 }
 
 main {
@@ -344,6 +348,7 @@ main {
   --hover-scale: 0.05;
   --hover-opacity: 0;
   --hover-rgb: 255, 255, 255;
+  --meta-glow: 0;
   position: relative;
   padding: 18px 18px 16px;
   border: none;
@@ -464,7 +469,9 @@ main {
 .work-meta {
   margin-left: auto;
   text-align: right;
-  color: rgba(233, 236, 245, .55);
+  color: rgba(233, 236, 245, calc(.55 + (var(--meta-glow) * .45)));
+  text-shadow: 0 0 calc(10px * var(--meta-glow)) rgba(255, 255, 255, calc(.26 * var(--meta-glow)));
+  transition: color .1s cubic-bezier(.2, .7, .2, 1), text-shadow .1s cubic-bezier(.2, .7, .2, 1);
 }
 
 .work-meta.mono {
@@ -483,6 +490,13 @@ main {
   bottom: 16px;
   font-size: 18px;
   color: rgba(233, 236, 245, .7);
+  transform-origin: center;
+  transition: transform .16s cubic-bezier(.25, .8, .2, 1), opacity .14s ease;
+}
+
+.work-item.is-hovered .work-arrow {
+  transform: scale(.18);
+  opacity: 0;
 }
 
 .mono {

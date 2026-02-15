@@ -39,18 +39,71 @@
     card.style.setProperty("--hover-y", `${y}px`);
   };
 
+  const metaGlowState = new WeakMap();
+  const getMetaGlowTarget = (card, event) => {
+    const metaEl = card.querySelector(".work-meta");
+    if (!metaEl) return 0;
+    const rect = metaEl.getBoundingClientRect();
+    const cx = rect.left + rect.width * 0.5;
+    const cy = rect.top + rect.height * 0.5;
+    const dx = event.clientX - cx;
+    const dy = event.clientY - cy;
+    const distance = Math.hypot(dx, dy);
+    const influenceRadius = Math.max(220, Math.max(rect.width, rect.height) * 3.6);
+    const linearProximity = Math.max(0, Math.min(1, 1 - distance / influenceRadius));
+    return linearProximity * linearProximity * (3 - 2 * linearProximity);
+  };
+
+  const ensureMetaGlowAnimation = (card) => {
+    const state = metaGlowState.get(card);
+    if (!state || state.rafId) return;
+    const tick = () => {
+      state.current += (state.target - state.current) * 0.24;
+      if (Math.abs(state.target - state.current) < 0.0015) {
+        state.current = state.target;
+      }
+      card.style.setProperty("--meta-glow", String(state.current));
+      if (!state.active && state.current === 0) {
+        state.rafId = 0;
+        return;
+      }
+      state.rafId = requestAnimationFrame(tick);
+    };
+    state.rafId = requestAnimationFrame(tick);
+  };
+
   if (!isCoarsePointer) {
     const workCards = document.querySelectorAll(".work-item");
     workCards.forEach((card) => {
+      metaGlowState.set(card, { current: 0, target: 0, active: false, rafId: 0 });
       card.addEventListener("pointerenter", (event) => {
         setCardHoverOrigin(card, event);
+        const state = metaGlowState.get(card);
+        if (state) {
+          state.active = true;
+          state.target = getMetaGlowTarget(card, event);
+          ensureMetaGlowAnimation(card);
+        }
         card.classList.add("is-hovered");
       });
       card.addEventListener("pointermove", (event) => {
         setCardHoverOrigin(card, event);
+        const state = metaGlowState.get(card);
+        if (state) {
+          state.target = getMetaGlowTarget(card, event);
+          ensureMetaGlowAnimation(card);
+        }
       });
       card.addEventListener("pointerleave", (event) => {
         setCardHoverOrigin(card, event);
+        const state = metaGlowState.get(card);
+        if (state) {
+          state.active = false;
+          state.target = 0;
+          ensureMetaGlowAnimation(card);
+        } else {
+          card.style.setProperty("--meta-glow", "0");
+        }
         card.classList.remove("is-hovered");
       });
     });
