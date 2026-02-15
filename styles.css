@@ -264,7 +264,7 @@ main {
   position: relative;
   display: inline-block;
   min-height: 1em;
-  transform-origin: 50% 50%;
+  transform-origin: left center;
   will-change: transform, opacity, filter;
 }
 

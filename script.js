@@ -1534,7 +1534,7 @@
     .fromTo(".section-title",
       {
         yPercent: 38,
-        scale: isMobile ? 0.96 : 0.9,
+        scale: isMobile ? 0.44 : 0.32,
         opacity: 0.35,
         filter: "blur(10px)"
       },
