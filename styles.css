@@ -466,6 +466,25 @@ main {
   padding-right: 44px;
 }
 
+.work-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.work-title-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+  object-fit: contain;
+  flex: 0 0 auto;
+  transition: filter .16s ease;
+}
+
+.work-item.is-hovered .work-title-icon {
+  filter: brightness(0) invert(1);
+}
+
 .work-meta {
   margin-left: auto;
   text-align: right;
